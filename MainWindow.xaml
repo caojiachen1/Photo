@@ -13,7 +13,7 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Background="Transparent">
+    <Grid x:Name="RootGrid" Background="Transparent" KeyDown="RootGrid_KeyDown">
         <Grid.RowDefinitions>
             <RowDefinition Height="48"/>
             <RowDefinition Height="*"/>
@@ -68,6 +68,48 @@
               PointerCaptureLost="ImageContainer_PointerCaptureLost"
               PointerEntered="ImageContainer_PointerEntered"
               PointerExited="ImageContainer_PointerExited">
+            
+            <!-- 左右切换按钮 -->
+            <Button x:Name="PreviousButton"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Stretch"
+                    Margin="0"
+                    Background="Transparent"
+                    Foreground="White"
+                    CornerRadius="0"
+                    Width="60"
+                    Padding="0"
+                    BorderThickness="0"
+                    Click="PreviousButton_Click"
+                    Visibility="Collapsed"
+                    Canvas.ZIndex="10">
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#19FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#33FFFFFF"/>
+                </Button.Resources>
+                <FontIcon Glyph="&#xE76B;" FontSize="24"/>
+            </Button>
+
+            <Button x:Name="NextButton"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Stretch"
+                    Margin="0"
+                    Background="Transparent"
+                    Foreground="White"
+                    CornerRadius="0"
+                    Width="60"
+                    Padding="0"
+                    BorderThickness="0"
+                    Click="NextButton_Click"
+                    Visibility="Collapsed"
+                    Canvas.ZIndex="10">
+                <Button.Resources>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#19FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#33FFFFFF"/>
+                </Button.Resources>
+                <FontIcon Glyph="&#xE76C;" FontSize="24"/>
+            </Button>
+
             <ScrollViewer x:Name="ImageScrollViewer" 
                           ZoomMode="Disabled"
                           HorizontalScrollMode="Enabled"

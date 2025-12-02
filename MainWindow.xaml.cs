@@ -45,6 +45,7 @@ namespace Photo
         private int _imageHeight = 0;
         private long _fileSize = 0;
         private bool _isImageLoaded = false;
+        private List<StorageFile> _folderFiles = new List<StorageFile>();
 
         // 鼠标拖拽相关
         private bool _isDragging = false;
@@ -108,7 +109,7 @@ namespace Photo
                 {
                     if (IsImageFile(file.FileType))
                     {
-                        await LoadImageAsync(file);
+                        await LoadImageAsync(file, true);
                     }
                 }
             }
@@ -125,7 +126,7 @@ namespace Photo
             try
             {
                 var file = await StorageFile.GetFileFromPathAsync(path);
-                await LoadImageAsync(file);
+                await LoadImageAsync(file, true);
             }
             catch (Exception ex)
             {
@@ -133,7 +134,7 @@ namespace Photo
             }
         }
 
-        private async Task LoadImageAsync(StorageFile file)
+        private async Task LoadImageAsync(StorageFile file, bool reloadFolder = true)
         {
             try
             {
@@ -172,6 +173,12 @@ namespace Photo
 
                 // 更新文件信息面板
                 UpdateFileInfoPanel();
+
+                if (reloadFolder)
+                {
+                    await UpdateFileListAsync();
+                }
+                UpdateNavigationButtons();
             }
             catch (Exception ex)
             {
@@ -525,7 +532,7 @@ namespace Photo
                 await tempFile.CopyAndReplaceAsync(_currentFile);
 
                 // 重新加载图片
-                await LoadImageAsync(_currentFile);
+                await LoadImageAsync(_currentFile, false);
             }
             catch (Exception ex)
             {
@@ -595,6 +602,100 @@ namespace Photo
         private void CloseFileInfoPanel_Click(object sender, RoutedEventArgs e)
         {
             FileInfoPanel.Visibility = Visibility.Collapsed;
+        }
+
+        #endregion
+
+        #region 导航功能
+
+        private async Task UpdateFileListAsync()
+        {
+            if (_currentFile == null) return;
+
+            try
+            {
+                var folder = await _currentFile.GetParentAsync();
+                if (folder != null)
+                {
+                    var files = await folder.GetFilesAsync();
+                    _folderFiles = files.Where(f => IsImageFile(f.FileType))
+                                        .OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase)
+                                        .ToList();
+                }
+                else
+                {
+                    _folderFiles.Clear();
+                    _folderFiles.Add(_currentFile);
+                }
+            }
+            catch
+            {
+                _folderFiles.Clear();
+                if (_currentFile != null) _folderFiles.Add(_currentFile);
+            }
+        }
+
+        private void UpdateNavigationButtons()
+        {
+            if (_folderFiles.Count <= 1 || _currentFile == null)
+            {
+                PreviousButton.Visibility = Visibility.Collapsed;
+                NextButton.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            int currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile.Path);
+            
+            PreviousButton.Visibility = currentIndex > 0 ? Visibility.Visible : Visibility.Collapsed;
+            NextButton.Visibility = currentIndex < _folderFiles.Count - 1 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private async void PreviousButton_Click(object sender, RoutedEventArgs e)
+        {
+            await NavigateImageAsync(-1);
+        }
+
+        private async void NextButton_Click(object sender, RoutedEventArgs e)
+        {
+            await NavigateImageAsync(1);
+        }
+
+        private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (!_isImageLoaded) return;
+
+            if (e.Key == Windows.System.VirtualKey.Left)
+            {
+                await NavigateImageAsync(-1);
+                e.Handled = true;
+            }
+            else if (e.Key == Windows.System.VirtualKey.Right)
+            {
+                await NavigateImageAsync(1);
+                e.Handled = true;
+            }
+        }
+
+        private async Task NavigateImageAsync(int direction)
+        {
+            if (_folderFiles.Count <= 1 || _currentFile == null) return;
+
+            int currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile.Path);
+            
+            if (currentIndex == -1) 
+            {
+                await UpdateFileListAsync();
+                currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile.Path);
+                if (currentIndex == -1) return;
+            }
+
+            int newIndex = currentIndex + direction;
+            
+            // 不循环切换
+            if (newIndex < 0 || newIndex >= _folderFiles.Count) return;
+
+            var nextFile = _folderFiles[newIndex];
+            await LoadImageAsync(nextFile, false);
         }
 
         #endregion
