@@ -691,69 +691,75 @@ namespace Photo
         {
             if (_currentFile == null) return;
 
-            var dialog = new ContentDialog
+            // 检查是否需要确认
+            if (AppSettings.ConfirmBeforeDelete)
             {
-                Title = "删除文件",
-                Content = $"确定要将 \"{_currentFile.Name}\" 移至回收站吗？",
-                PrimaryButtonText = "删除",
-                CloseButtonText = "取消",
-                DefaultButton = ContentDialogButton.Close,
-                XamlRoot = Content.XamlRoot
-            };
-
-            var result = await dialog.ShowAsync();
-            if (result == ContentDialogResult.Primary)
-            {
-                try
+                var dialog = new ContentDialog
                 {
-                    // 记录要切换到的文件
-                    StorageFile? targetFile = null;
-                    if (_folderFiles.Count > 1)
-                    {
-                        int currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile.Path);
-                        if (currentIndex > 0)
-                        {
-                            // 优先切换到上一张
-                            targetFile = _folderFiles[currentIndex - 1];
-                        }
-                        else if (currentIndex == 0 && _folderFiles.Count > 1)
-                        {
-                            // 如果是第一张，则切换到下一张（现在的第二张）
-                            targetFile = _folderFiles[currentIndex + 1];
-                        }
-                    }
+                    Title = "删除文件",
+                    Content = $"确定要将 \"{_currentFile.Name}\" 移至回收站吗？",
+                    PrimaryButtonText = "删除",
+                    CloseButtonText = "取消",
+                    DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = Content.XamlRoot
+                };
 
-                    await _currentFile.DeleteAsync(StorageDeleteOption.Default);
+                var result = await dialog.ShowAsync();
+                if (result != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+            }
+
+            try
+            {
+                // 记录要切换到的文件
+                StorageFile? targetFile = null;
+                if (_folderFiles.Count > 1)
+                {
+                    int currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile.Path);
+                    if (currentIndex > 0)
+                    {
+                        // 优先切换到上一张
+                        targetFile = _folderFiles[currentIndex - 1];
+                    }
+                    else if (currentIndex == 0 && _folderFiles.Count > 1)
+                    {
+                        // 如果是第一张，则切换到下一张（现在的第二张）
+                        targetFile = _folderFiles[currentIndex + 1];
+                    }
+                }
+
+                await _currentFile.DeleteAsync(StorageDeleteOption.Default);
+                
+                if (targetFile != null)
+                {
+                    // 加载目标图片
+                    await LoadImageAsync(targetFile, true);
+                }
+                else
+                {
+                    // 重置UI
+                    MainImage.Source = null;
+                    _currentFile = null;
+                    _currentFilePath = null;
+                    _isImageLoaded = false;
                     
-                    if (targetFile != null)
-                    {
-                        // 加载目标图片
-                        await LoadImageAsync(targetFile, true);
-                    }
-                    else
-                    {
-                        // 重置UI
-                        MainImage.Source = null;
-                        _currentFile = null;
-                        _currentFilePath = null;
-                        _isImageLoaded = false;
-                        
-                        FileNameText.Text = "";
-                        Title = "Photo";
-                        ImageDimensionsText.Text = "";
-                        FileSizeText.Text = "";
-                        PlaceholderPanel.Visibility = Visibility.Visible;
-                        FileInfoPanel.Visibility = Visibility.Collapsed;
-                        ZoomPercentText.Text = "100%";
-                        
-                        _folderFiles.Clear();
-                        UpdateNavigationButtons();
-                    }
+                    FileNameText.Text = "";
+                    Title = "Photo";
+                    ImageDimensionsText.Text = "";
+                    FileSizeText.Text = "";
+                    PlaceholderPanel.Visibility = Visibility.Visible;
+                    FileInfoPanel.Visibility = Visibility.Collapsed;
+                    ZoomPercentText.Text = "100%";
+                    
+                    _folderFiles.Clear();
+                    UpdateNavigationButtons();
                 }
-                catch (Exception ex)
-                {
-                    await ShowErrorDialog("无法删除文件", ex.Message);
-                }
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialog("无法删除文件", ex.Message);
             }
         }
 
@@ -1041,6 +1047,26 @@ namespace Photo
             var hwnd = WindowNative.GetWindowHandle(this);
             var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
             return AppWindow.GetFromWindowId(windowId);
+        }
+
+        #endregion
+
+        #region 设置功能
+
+        private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SettingsDialog
+            {
+                XamlRoot = Content.XamlRoot,
+                ConfirmBeforeDelete = AppSettings.ConfirmBeforeDelete
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                // 保存设置
+                AppSettings.ConfirmBeforeDelete = dialog.ConfirmBeforeDelete;
+            }
         }
 
         #endregion

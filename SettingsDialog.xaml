@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="Photo.SettingsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Photo"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="设置"
+    PrimaryButtonText="确定"
+    CloseButtonText="取消"
+    DefaultButton="Primary"
+    PrimaryButtonClick="ContentDialog_PrimaryButtonClick">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="400">
+        <StackPanel Spacing="4" MinWidth="400">
+            <!-- 请求删除照片的权限 -->
+            <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                  CornerRadius="4" 
+                  Padding="16,12"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                  BorderThickness="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 图标 -->
+                <FontIcon Grid.Column="0" 
+                          Glyph="&#xE74D;" 
+                          FontSize="20" 
+                          Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,16,0"/>
+
+                <!-- 文本 -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="请求删除照片的权限" 
+                               FontSize="14" 
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="删除项目或文件夹时显示确认对话框" 
+                               FontSize="12" 
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- 开关 -->
+                <ToggleSwitch x:Name="DeleteConfirmToggle" 
+                              Grid.Column="2" 
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Right"
+                              Margin="16,0,-100,0"
+                              OnContent=""
+                              OffContent=""/>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>
