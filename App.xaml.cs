@@ -32,14 +32,28 @@ namespace Photo
             _window = new MainWindow();
             _window.Activate();
 
-            // 处理命令行参数
-            var cmdArgs = Environment.GetCommandLineArgs();
-            if (cmdArgs.Length > 1)
+            // Check for file activation
+            var activatedEventArgs = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
+            if (activatedEventArgs.Kind == Microsoft.Windows.AppLifecycle.ExtendedActivationKind.File)
             {
-                var filePath = cmdArgs[1];
-                if (File.Exists(filePath))
+                var fileArgs = (Windows.ApplicationModel.Activation.IFileActivatedEventArgs)activatedEventArgs.Data;
+                if (fileArgs.Files.Count > 0)
                 {
-                    _ = _window.LoadImageFromPathAsync(filePath);
+                    var file = (Windows.Storage.StorageFile)fileArgs.Files[0];
+                    _ = _window.LoadImageFromPathAsync(file.Path);
+                }
+            }
+            else
+            {
+                // 处理命令行参数
+                var cmdArgs = Environment.GetCommandLineArgs();
+                if (cmdArgs.Length > 1)
+                {
+                    var filePath = cmdArgs[1];
+                    if (File.Exists(filePath))
+                    {
+                        _ = _window.LoadImageFromPathAsync(filePath);
+                    }
                 }
             }
         }
