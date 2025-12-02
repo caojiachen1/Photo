@@ -208,9 +208,12 @@
                     <TextBlock Text="1:1" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
                 </Button>
 
-                <!-- 缩放控制 -->
-                <DropDownButton x:Name="ZoomButton" ToolTipService.ToolTip="缩放" MinWidth="70">
-                    <TextBlock x:Name="ZoomPercentText" Text="100%"/>
+                <!-- 分隔线 -->
+                <Border Width="1" Height="20" Background="#444444" Margin="8,0"/>
+
+                <!-- 缩放百分比下拉菜单 -->
+                <DropDownButton x:Name="ZoomButton" ToolTipService.ToolTip="缩放" MinWidth="60" Background="Transparent" BorderBrush="Transparent">
+                    <TextBlock x:Name="ZoomPercentText" Text="100%" FontSize="12"/>
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">
                             <MenuFlyoutItem Text="适应窗口" Click="FitToWindow_Click"/>
@@ -224,6 +227,41 @@
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
+
+                <!-- 缩小按钮 -->
+                <Button x:Name="ZoomOutButton" ToolTipService.ToolTip="缩小" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="ZoomOut_Click" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE71F;" FontSize="14"/>
+                </Button>
+
+                <!-- 缩放滑块 -->
+                <Slider x:Name="ZoomSlider" 
+                        Width="120" 
+                        Minimum="10" 
+                        Maximum="400" 
+                        Value="100" 
+                        VerticalAlignment="Center"
+                        ValueChanged="ZoomSlider_ValueChanged"
+                        PointerPressed="ZoomSlider_PointerPressed"
+                        PointerReleased="ZoomSlider_PointerReleased"/>
+
+                <!-- 放大按钮 -->
+                <Button x:Name="ZoomInButton" ToolTipService.ToolTip="放大" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="ZoomIn_Click" VerticalAlignment="Center">
+                    <FontIcon Glyph="&#xE8A3;" FontSize="14"/>
+                </Button>
+
+                <!-- 分隔线 -->
+                <Border Width="1" Height="20" Background="#444444" Margin="8,0"/>
+
+                <!-- 全屏按钮 -->
+                <Button x:Name="FullScreenButton" 
+                        ToolTipService.ToolTip="全屏" 
+                        Background="Transparent" 
+                        BorderBrush="Transparent" 
+                        Padding="4" 
+                        Click="FullScreenButton_Click"
+                        VerticalAlignment="Center">
+                    <FontIcon x:Name="FullScreenIcon" Glyph="&#xE740;" FontSize="14"/>
+                </Button>
             </StackPanel>
         </Grid>
 

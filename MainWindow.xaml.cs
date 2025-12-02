@@ -23,6 +23,7 @@ using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using WinRT.Interop;
 using Microsoft.UI.Input;
+using Microsoft.UI.Windowing;
 
 namespace Photo
 {
@@ -56,6 +57,12 @@ namespace Photo
 
         // 缩放相关
         private float _minZoomFactor = 0.1f;
+
+        // 滑块更新标志（避免循环更新）
+        private bool _isUpdatingSlider = false;
+
+        // 全屏相关
+        private bool _isFullScreen = false;
 
         public MainWindow()
         {
@@ -342,6 +349,7 @@ namespace Photo
             if (!e.IsIntermediate)
             {
                 UpdateZoomPercentage();
+                UpdateZoomSlider();
             }
             UpdateCursor();
         }
@@ -350,6 +358,17 @@ namespace Photo
         {
             var zoomFactor = ImageScrollViewer.ZoomFactor;
             ZoomPercentText.Text = $"{(int)(zoomFactor * 100)}%";
+        }
+
+        private void UpdateZoomSlider()
+        {
+            if (ZoomSlider == null) return;
+
+            _isUpdatingSlider = true;
+            var zoomPercent = ImageScrollViewer.ZoomFactor * 100;
+            // 限制滑块值在有效范围内
+            ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, Math.Min(ZoomSlider.Maximum, zoomPercent));
+            _isUpdatingSlider = false;
         }
 
         #region 缩放功能
@@ -433,6 +452,47 @@ namespace Photo
         private void Zoom400_Click(object sender, RoutedEventArgs e)
         {
             ImageScrollViewer.ChangeView(null, null, 4.0f);
+        }
+
+        private void ZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isImageLoaded) return;
+
+            UpdateMinZoomFactor();
+            var currentZoom = ImageScrollViewer.ZoomFactor;
+            var newZoom = currentZoom * 0.8f;
+            newZoom = Math.Max(_minZoomFactor, newZoom);
+            ImageScrollViewer.ChangeView(null, null, newZoom);
+        }
+
+        private void ZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_isImageLoaded) return;
+
+            var currentZoom = ImageScrollViewer.ZoomFactor;
+            var newZoom = currentZoom * 1.25f;
+            newZoom = Math.Min(10f, newZoom);
+            ImageScrollViewer.ChangeView(null, null, newZoom);
+        }
+
+        private void ZoomSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (_isUpdatingSlider || !_isImageLoaded) return;
+
+            var newZoom = (float)(e.NewValue / 100.0);
+            UpdateMinZoomFactor();
+            newZoom = Math.Max(_minZoomFactor, Math.Min(10f, newZoom));
+            ImageScrollViewer.ChangeView(null, null, newZoom);
+        }
+
+        private void ZoomSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            // 开始拖动滑块时的处理
+        }
+
+        private void ZoomSlider_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            // 结束拖动滑块时的处理
         }
 
         #endregion
@@ -806,6 +866,40 @@ namespace Photo
 
             var nextFile = _folderFiles[newIndex];
             await LoadImageAsync(nextFile, false);
+        }
+
+        #endregion
+
+        #region 全屏功能
+
+        private void FullScreenButton_Click(object sender, RoutedEventArgs e)
+        {
+            var appWindow = GetAppWindow();
+            if (appWindow == null) return;
+
+            if (_isFullScreen)
+            {
+                // 退出全屏
+                appWindow.SetPresenter(AppWindowPresenterKind.Default);
+                FullScreenIcon.Glyph = "\uE740"; // 全屏图标
+                ToolTipService.SetToolTip(FullScreenButton, "全屏");
+                _isFullScreen = false;
+            }
+            else
+            {
+                // 进入全屏
+                appWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+                FullScreenIcon.Glyph = "\uE73F"; // 退出全屏图标
+                ToolTipService.SetToolTip(FullScreenButton, "退出全屏");
+                _isFullScreen = true;
+            }
+        }
+
+        private AppWindow? GetAppWindow()
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
+            return AppWindow.GetFromWindowId(windowId);
         }
 
         #endregion
