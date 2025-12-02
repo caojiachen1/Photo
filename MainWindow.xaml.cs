@@ -645,21 +645,49 @@ namespace Photo
             {
                 try
                 {
+                    // 记录要切换到的文件
+                    StorageFile? targetFile = null;
+                    if (_folderFiles.Count > 1)
+                    {
+                        int currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile.Path);
+                        if (currentIndex > 0)
+                        {
+                            // 优先切换到上一张
+                            targetFile = _folderFiles[currentIndex - 1];
+                        }
+                        else if (currentIndex == 0 && _folderFiles.Count > 1)
+                        {
+                            // 如果是第一张，则切换到下一张（现在的第二张）
+                            targetFile = _folderFiles[currentIndex + 1];
+                        }
+                    }
+
                     await _currentFile.DeleteAsync(StorageDeleteOption.Default);
                     
-                    // 重置UI
-                    MainImage.Source = null;
-                    _currentFile = null;
-                    _currentFilePath = null;
-                    _isImageLoaded = false;
-                    
-                    FileNameText.Text = "";
-                    Title = "Photo";
-                    ImageDimensionsText.Text = "";
-                    FileSizeText.Text = "";
-                    PlaceholderPanel.Visibility = Visibility.Visible;
-                    FileInfoPanel.Visibility = Visibility.Collapsed;
-                    ZoomPercentText.Text = "100%";
+                    if (targetFile != null)
+                    {
+                        // 加载目标图片
+                        await LoadImageAsync(targetFile, true);
+                    }
+                    else
+                    {
+                        // 重置UI
+                        MainImage.Source = null;
+                        _currentFile = null;
+                        _currentFilePath = null;
+                        _isImageLoaded = false;
+                        
+                        FileNameText.Text = "";
+                        Title = "Photo";
+                        ImageDimensionsText.Text = "";
+                        FileSizeText.Text = "";
+                        PlaceholderPanel.Visibility = Visibility.Visible;
+                        FileInfoPanel.Visibility = Visibility.Collapsed;
+                        ZoomPercentText.Text = "100%";
+                        
+                        _folderFiles.Clear();
+                        UpdateNavigationButtons();
+                    }
                 }
                 catch (Exception ex)
                 {
