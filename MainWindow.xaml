@@ -14,6 +14,36 @@
     </Window.SystemBackdrop>
 
     <Grid x:Name="RootGrid" Background="Transparent" KeyDown="RootGrid_KeyDown">
+        <Grid.Resources>
+            <ControlTemplate x:Key="NavButtonTemplate" TargetType="Button">
+                <Grid Background="Transparent">
+                    <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal" />
+                            <VisualState x:Name="PointerOver">
+                                <VisualState.Setters>
+                                    <Setter Target="ContentGrid.Background" Value="#19FFFFFF" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters>
+                                    <Setter Target="ContentGrid.Background" Value="#33FFFFFF" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateManager.VisualStateGroups>
+                    
+                    <Grid x:Name="ContentGrid" 
+                          Width="40" Height="40" 
+                          CornerRadius="20" 
+                          VerticalAlignment="Center" 
+                          HorizontalAlignment="Center">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                </Grid>
+            </ControlTemplate>
+        </Grid.Resources>
+
         <Grid.RowDefinitions>
             <RowDefinition Height="48"/>
             <RowDefinition Height="*"/>
@@ -71,43 +101,27 @@
             
             <!-- 左右切换按钮 -->
             <Button x:Name="PreviousButton"
+                    Template="{StaticResource NavButtonTemplate}"
                     HorizontalAlignment="Left"
                     VerticalAlignment="Stretch"
                     Margin="0"
-                    Background="Transparent"
-                    Foreground="White"
-                    CornerRadius="0"
                     Width="60"
-                    Padding="0"
-                    BorderThickness="0"
                     Click="PreviousButton_Click"
                     Visibility="Collapsed"
                     Canvas.ZIndex="10">
-                <Button.Resources>
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#19FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#33FFFFFF"/>
-                </Button.Resources>
-                <FontIcon Glyph="&#xE76B;" FontSize="24"/>
+                <FontIcon Glyph="&#xE76B;" FontSize="20"/>
             </Button>
 
             <Button x:Name="NextButton"
+                    Template="{StaticResource NavButtonTemplate}"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Stretch"
                     Margin="0"
-                    Background="Transparent"
-                    Foreground="White"
-                    CornerRadius="0"
                     Width="60"
-                    Padding="0"
-                    BorderThickness="0"
                     Click="NextButton_Click"
                     Visibility="Collapsed"
                     Canvas.ZIndex="10">
-                <Button.Resources>
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#19FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#33FFFFFF"/>
-                </Button.Resources>
-                <FontIcon Glyph="&#xE76C;" FontSize="24"/>
+                <FontIcon Glyph="&#xE76C;" FontSize="20"/>
             </Button>
 
             <ScrollViewer x:Name="ImageScrollViewer" 
