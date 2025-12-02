@@ -24,6 +24,7 @@ using Windows.Storage.Streams;
 using WinRT.Interop;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
+using System.Diagnostics;
 
 namespace Photo
 {
@@ -776,6 +777,111 @@ namespace Photo
 
         #endregion
 
+        #region 另存为、复制、在资源管理器中打开
+
+        private async void SaveAsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentFile == null || !_isImageLoaded) return;
+
+            try
+            {
+                var savePicker = new FileSavePicker();
+                var hwnd = WindowNative.GetWindowHandle(this);
+                InitializeWithWindow.Initialize(savePicker, hwnd);
+
+                savePicker.SuggestedStartLocation = PickerLocationId.PicturesLibrary;
+                savePicker.SuggestedFileName = Path.GetFileNameWithoutExtension(_currentFile.Name);
+
+                // 根据当前文件类型添加文件类型选项
+                var extension = _currentFile.FileType.ToLowerInvariant();
+                switch (extension)
+                {
+                    case ".jpg":
+                    case ".jpeg":
+                        savePicker.FileTypeChoices.Add("JPEG 图片", new List<string> { ".jpg", ".jpeg" });
+                        break;
+                    case ".png":
+                        savePicker.FileTypeChoices.Add("PNG 图片", new List<string> { ".png" });
+                        break;
+                    case ".bmp":
+                        savePicker.FileTypeChoices.Add("BMP 图片", new List<string> { ".bmp" });
+                        break;
+                    case ".gif":
+                        savePicker.FileTypeChoices.Add("GIF 图片", new List<string> { ".gif" });
+                        break;
+                    case ".webp":
+                        savePicker.FileTypeChoices.Add("WebP 图片", new List<string> { ".webp" });
+                        break;
+                    case ".tiff":
+                    case ".tif":
+                        savePicker.FileTypeChoices.Add("TIFF 图片", new List<string> { ".tiff", ".tif" });
+                        break;
+                    default:
+                        savePicker.FileTypeChoices.Add("图片", new List<string> { extension });
+                        break;
+                }
+
+                // 添加其他常见格式
+                if (extension != ".jpg" && extension != ".jpeg")
+                    savePicker.FileTypeChoices.Add("JPEG 图片", new List<string> { ".jpg", ".jpeg" });
+                if (extension != ".png")
+                    savePicker.FileTypeChoices.Add("PNG 图片", new List<string> { ".png" });
+                if (extension != ".bmp")
+                    savePicker.FileTypeChoices.Add("BMP 图片", new List<string> { ".bmp" });
+
+                var file = await savePicker.PickSaveFileAsync();
+                if (file != null)
+                {
+                    await _currentFile.CopyAndReplaceAsync(file);
+                }
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialog("无法保存文件", ex.Message);
+            }
+        }
+
+        private async void CopyButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentFile == null || !_isImageLoaded) return;
+
+            try
+            {
+                var dataPackage = new DataPackage();
+                dataPackage.RequestedOperation = DataPackageOperation.Copy;
+
+                // 复制文件引用
+                dataPackage.SetStorageItems(new List<IStorageItem> { _currentFile });
+
+                // 同时复制图片位图数据
+                var stream = RandomAccessStreamReference.CreateFromFile(_currentFile);
+                dataPackage.SetBitmap(stream);
+
+                Clipboard.SetContent(dataPackage);
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialog("无法复制图片", ex.Message);
+            }
+        }
+
+        private async void OpenInExplorerButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentFile == null || string.IsNullOrEmpty(_currentFilePath)) return;
+
+            try
+            {
+                // 使用 explorer.exe 打开并选中文件
+                Process.Start("explorer.exe", $"/select,\"{_currentFilePath}\"");
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialog("无法打开文件资源管理器", ex.Message);
+            }
+        }
+
+        #endregion
+
         #region 导航功能
 
         private async Task UpdateFileListAsync()
@@ -832,6 +938,14 @@ namespace Photo
 
         private async void RootGrid_KeyDown(object sender, KeyRoutedEventArgs e)
         {
+            // ESC 键退出全屏
+            if (e.Key == Windows.System.VirtualKey.Escape && _isFullScreen)
+            {
+                ToggleFullScreen();
+                e.Handled = true;
+                return;
+            }
+
             if (!_isImageLoaded) return;
 
             if (e.Key == Windows.System.VirtualKey.Left)
@@ -874,6 +988,11 @@ namespace Photo
 
         private void FullScreenButton_Click(object sender, RoutedEventArgs e)
         {
+            ToggleFullScreen();
+        }
+
+        private void ToggleFullScreen()
+        {
             var appWindow = GetAppWindow();
             if (appWindow == null) return;
 
@@ -884,6 +1003,14 @@ namespace Photo
                 FullScreenIcon.Glyph = "\uE740"; // 全屏图标
                 ToolTipService.SetToolTip(FullScreenButton, "全屏");
                 _isFullScreen = false;
+
+                // 显示工具栏
+                TopToolbar.Visibility = Visibility.Visible;
+                BottomStatusBar.Visibility = Visibility.Visible;
+
+                // 恢复行定义
+                RootGrid.RowDefinitions[0].Height = new GridLength(48);
+                RootGrid.RowDefinitions[2].Height = new GridLength(48);
             }
             else
             {
@@ -892,6 +1019,20 @@ namespace Photo
                 FullScreenIcon.Glyph = "\uE73F"; // 退出全屏图标
                 ToolTipService.SetToolTip(FullScreenButton, "退出全屏");
                 _isFullScreen = true;
+
+                // 隐藏工具栏
+                TopToolbar.Visibility = Visibility.Collapsed;
+                BottomStatusBar.Visibility = Visibility.Collapsed;
+
+                // 设置行高度为0
+                RootGrid.RowDefinitions[0].Height = new GridLength(0);
+                RootGrid.RowDefinitions[2].Height = new GridLength(0);
+            }
+
+            // 重新适应窗口
+            if (_isImageLoaded)
+            {
+                DispatcherQueue.TryEnqueue(() => FitImageToWindow());
             }
         }
 

@@ -15,6 +15,11 @@
 
     <Grid x:Name="RootGrid" Background="Transparent" KeyDown="RootGrid_KeyDown">
         <Grid.Resources>
+            <!-- 使用 Segoe Fluent Icons 字体让图标更圆润统一 -->
+            <Style TargetType="FontIcon">
+                <Setter Property="FontFamily" Value="Segoe Fluent Icons"/>
+            </Style>
+            
             <ControlTemplate x:Key="NavButtonTemplate" TargetType="Button">
                 <Grid Background="Transparent">
                     <VisualStateManager.VisualStateGroups>
@@ -51,7 +56,7 @@
         </Grid.RowDefinitions>
 
         <!-- 顶部工具栏 -->
-        <Grid Grid.Row="0" Background="#1F1F1F">
+        <Grid x:Name="TopToolbar" Grid.Row="0" Background="#1F1F1F">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -68,6 +73,36 @@
                 <!-- 删除按钮 -->
                 <Button x:Name="DeleteButton" ToolTipService.ToolTip="删除" Click="DeleteButton_Click" Margin="4,0,0,0">
                     <FontIcon Glyph="&#xE74D;" FontSize="16"/>
+                </Button>
+
+                <!-- 更多操作菜单 -->
+                <Button x:Name="MoreActionsButton" ToolTipService.ToolTip="更多操作" Margin="4,0,0,0">
+                    <FontIcon Glyph="&#xE712;" FontSize="16"/>
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <MenuFlyoutItem x:Name="SaveAsMenuItem" Text="另存为" Click="SaveAsButton_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE792;"/>
+                                </MenuFlyoutItem.Icon>
+                                <MenuFlyoutItem.KeyboardAccelerators>
+                                    <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
+                                </MenuFlyoutItem.KeyboardAccelerators>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="CopyMenuItem" Text="复制" Click="CopyButton_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8C8;"/>
+                                </MenuFlyoutItem.Icon>
+                                <MenuFlyoutItem.KeyboardAccelerators>
+                                    <KeyboardAccelerator Modifiers="Control" Key="C"/>
+                                </MenuFlyoutItem.KeyboardAccelerators>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem x:Name="OpenInExplorerMenuItem" Text="在文件资源管理器中打开" Click="OpenInExplorerButton_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xEC50;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
                 </Button>
             </StackPanel>
 
@@ -161,7 +196,7 @@
         </Grid>
 
         <!-- 底部状态栏 -->
-        <Grid Grid.Row="2" Background="#2D2D2D">
+        <Grid x:Name="BottomStatusBar" Grid.Row="2" Background="#2D2D2D">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
