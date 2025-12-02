@@ -52,6 +52,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="48"/>
             <RowDefinition Height="*"/>
+            <RowDefinition x:Name="ThumbnailRow" Height="Auto"/>
             <RowDefinition Height="48"/>
         </Grid.RowDefinitions>
 
@@ -201,8 +202,61 @@
             </StackPanel>
         </Grid>
 
+        <!-- 缩略图条 -->
+        <Grid x:Name="ThumbnailBar" Grid.Row="2" Background="#252525" Height="88" Visibility="Collapsed">
+            <!-- 缩略图列表 -->
+            <ListView x:Name="ThumbnailListView" 
+                      ItemsSource="{x:Bind ThumbnailItems}"
+                      SelectionMode="Single"
+                      SelectionChanged="ThumbnailListView_SelectionChanged"
+                      ScrollViewer.HorizontalScrollMode="Enabled"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      ScrollViewer.VerticalScrollMode="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Stretch"
+                      PointerWheelChanged="ThumbnailListView_PointerWheelChanged"
+                      Padding="8,4"
+                      Margin="0">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="0"/>
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="MinWidth" Value="0"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="local:ThumbnailItem">
+                        <Grid Width="80" Height="80" 
+                                CornerRadius="4" 
+                                Background="#1A1A1A"
+                                BorderBrush="{x:Bind BorderBrush, Mode=OneWay}"
+                                BorderThickness="2"
+                                Margin="0,0,0,6">
+                            <Image Source="{x:Bind Thumbnail, Mode=OneWay}" 
+                                    Stretch="Uniform"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Margin="0"/>
+                            <!-- 加载中指示器 -->
+                            <ProgressRing IsActive="{x:Bind IsLoading, Mode=OneWay}" 
+                                          Width="20" Height="20"
+                                          Visibility="{x:Bind IsLoading, Mode=OneWay}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
         <!-- 底部状态栏 -->
-        <Grid x:Name="BottomStatusBar" Grid.Row="2" Background="#2D2D2D">
+        <Grid x:Name="BottomStatusBar" Grid.Row="3" Background="#2D2D2D">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -211,6 +265,11 @@
 
             <!-- 左侧信息 -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" Margin="12,0,0,0" VerticalAlignment="Center">
+                <!-- 缩略图切换按钮 -->
+                <Button x:Name="ThumbnailToggleButton" ToolTipService.ToolTip="显示/隐藏缩略图" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="ThumbnailToggleButton_Click">
+                    <FontIcon x:Name="ThumbnailToggleIcon" Glyph="&#xE8FD;" FontSize="14"/>
+                </Button>
+
                 <!-- 文件信息按钮 -->
                 <Button x:Name="FileInfoButton" ToolTipService.ToolTip="文件信息" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="FileInfoButton_Click">
                     <FontIcon Glyph="&#xE946;" FontSize="14"/>
@@ -307,7 +366,7 @@
         </Grid>
 
         <!-- 文件信息弹出面板 -->
-        <Grid x:Name="FileInfoPanel" Grid.Row="1" 
+        <Grid x:Name="FileInfoPanel" Grid.Row="1" Grid.RowSpan="2" 
               HorizontalAlignment="Right" 
               VerticalAlignment="Stretch"
               Width="320"

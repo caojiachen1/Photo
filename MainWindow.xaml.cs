@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -19,6 +20,7 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
+using Windows.Storage.FileProperties;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using WinRT.Interop;
@@ -65,6 +67,12 @@ namespace Photo
         // 全屏相关
         private bool _isFullScreen = false;
 
+        // 缩略图相关
+        public ObservableCollection<ThumbnailItem> ThumbnailItems { get; } = new ObservableCollection<ThumbnailItem>();
+        private bool _isThumbnailBarVisible = false;
+        private bool _isUpdatingThumbnailSelection = false;
+        private ScrollViewer? _thumbnailScrollViewer;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -83,6 +91,27 @@ namespace Photo
                 ShowWindow(hwnd, SW_MAXIMIZE);
             }
             catch { }
+
+            // 加载完成后获取缩略图列表的ScrollViewer
+            ThumbnailListView.Loaded += (s, e) =>
+            {
+                _thumbnailScrollViewer = GetScrollViewer(ThumbnailListView);
+            };
+        }
+
+        private ScrollViewer? GetScrollViewer(DependencyObject element)
+        {
+            if (element is ScrollViewer scrollViewer)
+                return scrollViewer;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+            {
+                var child = VisualTreeHelper.GetChild(element, i);
+                var result = GetScrollViewer(child);
+                if (result != null)
+                    return result;
+            }
+            return null;
         }
 
         private void SetDarkTitleBar()
@@ -267,6 +296,11 @@ namespace Photo
                 if (reloadFolder)
                 {
                     await UpdateFileListAsync();
+                }
+                else
+                {
+                    // 仅更新缩略图选择状态
+                    UpdateThumbnailSelection();
                 }
                 UpdateNavigationButtons();
             }
@@ -909,6 +943,9 @@ namespace Photo
                     _folderFiles.Clear();
                     _folderFiles.Add(_currentFile);
                 }
+
+                // 更新缩略图列表
+                await UpdateThumbnailsAsync();
             }
             catch
             {
@@ -1013,10 +1050,16 @@ namespace Photo
                 // 显示工具栏
                 TopToolbar.Visibility = Visibility.Visible;
                 BottomStatusBar.Visibility = Visibility.Visible;
+                
+                // 恢复缩略图条状态
+                if (_isThumbnailBarVisible)
+                {
+                    ThumbnailBar.Visibility = Visibility.Visible;
+                }
 
                 // 恢复行定义
                 RootGrid.RowDefinitions[0].Height = new GridLength(48);
-                RootGrid.RowDefinitions[2].Height = new GridLength(48);
+                RootGrid.RowDefinitions[3].Height = new GridLength(48);
             }
             else
             {
@@ -1026,13 +1069,14 @@ namespace Photo
                 ToolTipService.SetToolTip(FullScreenButton, "退出全屏");
                 _isFullScreen = true;
 
-                // 隐藏工具栏
+                // 隐藏工具栏和缩略图条
                 TopToolbar.Visibility = Visibility.Collapsed;
                 BottomStatusBar.Visibility = Visibility.Collapsed;
+                ThumbnailBar.Visibility = Visibility.Collapsed;
 
                 // 设置行高度为0
                 RootGrid.RowDefinitions[0].Height = new GridLength(0);
-                RootGrid.RowDefinitions[2].Height = new GridLength(0);
+                RootGrid.RowDefinitions[3].Height = new GridLength(0);
             }
 
             // 重新适应窗口
@@ -1067,6 +1111,174 @@ namespace Photo
                 // 保存设置
                 AppSettings.ConfirmBeforeDelete = dialog.ConfirmBeforeDelete;
             }
+        }
+
+        #endregion
+
+        #region 缩略图功能
+
+        private void ThumbnailToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isThumbnailBarVisible = !_isThumbnailBarVisible;
+            ThumbnailBar.Visibility = _isThumbnailBarVisible ? Visibility.Visible : Visibility.Collapsed;
+            
+            // 更新图标
+            ThumbnailToggleIcon.Glyph = _isThumbnailBarVisible ? "\uE70D" : "\uE8FD";
+            ToolTipService.SetToolTip(ThumbnailToggleButton, _isThumbnailBarVisible ? "隐藏缩略图" : "显示缩略图");
+
+            // 如果显示缩略图，滚动到当前选中项
+            if (_isThumbnailBarVisible && _currentFile != null)
+            {
+                ScrollToCurrentThumbnail();
+            }
+
+            // 重新适应窗口，避免缩略图列表遮挡图片
+            if (_isImageLoaded)
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    // 延迟一帧让布局更新完成
+                    DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                    {
+                        FitImageToWindow();
+                    });
+                });
+            }
+        }
+
+        private async Task UpdateThumbnailsAsync()
+        {
+            // 清空现有缩略图
+            ThumbnailItems.Clear();
+
+            if (_folderFiles.Count == 0) return;
+
+            // 添加所有文件的缩略图项（先显示占位符）
+            foreach (var file in _folderFiles)
+            {
+                var item = new ThumbnailItem(file);
+                item.IsSelected = file.Path == _currentFile?.Path;
+                ThumbnailItems.Add(item);
+            }
+
+            // 异步加载缩略图
+            await LoadThumbnailsAsync();
+        }
+
+        private async Task LoadThumbnailsAsync()
+        {
+            // 并行加载缩略图，但限制并发数以避免过度消耗资源
+            var tasks = new List<Task>();
+            var semaphore = new System.Threading.SemaphoreSlim(4); // 最多同时加载4个
+
+            foreach (var item in ThumbnailItems.ToList())
+            {
+                tasks.Add(LoadSingleThumbnailAsync(item, semaphore));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task LoadSingleThumbnailAsync(ThumbnailItem item, System.Threading.SemaphoreSlim semaphore)
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                var thumbnail = await item.File.GetThumbnailAsync(ThumbnailMode.SingleItem, 200, ThumbnailOptions.ResizeThumbnail);
+                if (thumbnail != null)
+                {
+                    var bitmapImage = new BitmapImage();
+                    await bitmapImage.SetSourceAsync(thumbnail);
+
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        item.Thumbnail = bitmapImage;
+                        item.IsLoading = false;
+                    });
+                }
+                else
+                {
+                    DispatcherQueue.TryEnqueue(() =>
+                    {
+                        item.IsLoading = false;
+                    });
+                }
+            }
+            catch
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    item.IsLoading = false;
+                });
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
+
+        private void UpdateThumbnailSelection()
+        {
+            if (_currentFile == null) return;
+
+            _isUpdatingThumbnailSelection = true;
+            
+            foreach (var item in ThumbnailItems)
+            {
+                item.IsSelected = item.FilePath == _currentFile.Path;
+            }
+
+            // 选中对应项
+            var selectedItem = ThumbnailItems.FirstOrDefault(t => t.FilePath == _currentFile.Path);
+            if (selectedItem != null)
+            {
+                ThumbnailListView.SelectedItem = selectedItem;
+            }
+
+            _isUpdatingThumbnailSelection = false;
+
+            // 滚动到当前缩略图
+            ScrollToCurrentThumbnail();
+        }
+
+        private void ScrollToCurrentThumbnail()
+        {
+            var selectedItem = ThumbnailItems.FirstOrDefault(t => t.FilePath == _currentFile?.Path);
+            if (selectedItem != null)
+            {
+                ThumbnailListView.ScrollIntoView(selectedItem, ScrollIntoViewAlignment.Default);
+            }
+        }
+
+        private async void ThumbnailListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isUpdatingThumbnailSelection) return;
+            if (e.AddedItems.Count == 0) return;
+
+            if (e.AddedItems[0] is ThumbnailItem item)
+            {
+                if (item.FilePath != _currentFile?.Path)
+                {
+                    await LoadImageAsync(item.File, false);
+                    UpdateThumbnailSelection();
+                    UpdateNavigationButtons();
+                }
+            }
+        }
+
+        private void ThumbnailListView_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+        {
+            if (_thumbnailScrollViewer == null) return;
+
+            var properties = e.GetCurrentPoint(ThumbnailListView).Properties;
+            var delta = properties.MouseWheelDelta;
+
+            // 将垂直滚轮转换为水平滚动
+            var newOffset = _thumbnailScrollViewer.HorizontalOffset - delta;
+            newOffset = Math.Max(0, Math.Min(_thumbnailScrollViewer.ScrollableWidth, newOffset));
+            _thumbnailScrollViewer.ChangeView(newOffset, null, null);
+
+            e.Handled = true;
         }
 
         #endregion
