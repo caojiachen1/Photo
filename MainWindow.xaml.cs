@@ -22,6 +22,7 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using WinRT.Interop;
+using Microsoft.UI.Input;
 
 namespace Photo
 {
@@ -39,6 +40,14 @@ namespace Photo
         private int _imageHeight = 0;
         private long _fileSize = 0;
         private bool _isImageLoaded = false;
+
+        // 鼠标拖拽相关
+        private bool _isDragging = false;
+        private Point _lastPointerPosition;
+        private Point _dragStartScrollPosition;
+
+        // 缩放相关
+        private float _minZoomFactor = 0.1f;
 
         public MainWindow()
         {
@@ -195,26 +204,35 @@ namespace Photo
             return $"{size:0.##} {sizes[order]}";
         }
 
-        private void FitImageToWindow()
+        private float CalculateFitToWindowZoom()
         {
-            if (!_isImageLoaded) return;
-            
-            // 计算合适的缩放比例使图片适应窗口
             var scrollViewerWidth = ImageScrollViewer.ActualWidth;
             var scrollViewerHeight = ImageScrollViewer.ActualHeight;
 
             if (scrollViewerWidth <= 0 || scrollViewerHeight <= 0 || _imageWidth <= 0 || _imageHeight <= 0)
-                return;
+                return 0.1f;
 
             var scaleX = scrollViewerWidth / _imageWidth;
             var scaleY = scrollViewerHeight / _imageHeight;
             var scale = Math.Min(scaleX, scaleY);
             scale = Math.Min(scale, 1.0); // 不要放大超过100%
 
-            // 确保在有效范围内
-            scale = Math.Max(0.1f, Math.Min(10f, (float)scale));
+            return (float)Math.Max(0.01f, scale);
+        }
 
-            ImageScrollViewer.ChangeView(null, null, (float)scale);
+        private void UpdateMinZoomFactor()
+        {
+            _minZoomFactor = CalculateFitToWindowZoom();
+        }
+
+        private void FitImageToWindow()
+        {
+            if (!_isImageLoaded) return;
+            
+            var scale = CalculateFitToWindowZoom();
+            _minZoomFactor = scale;
+
+            ImageScrollViewer.ChangeView(null, null, scale);
         }
 
         private void ImageScrollViewer_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
@@ -232,6 +250,49 @@ namespace Photo
         }
 
         #region 缩放功能
+
+        private void ImageContainer_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_isImageLoaded) return;
+
+            var properties = e.GetCurrentPoint(ImageScrollViewer).Properties;
+            var delta = properties.MouseWheelDelta;
+
+            // 更新最小缩放比例
+            UpdateMinZoomFactor();
+
+            // 计算新的缩放比例
+            var currentZoom = ImageScrollViewer.ZoomFactor;
+            var zoomDelta = delta > 0 ? 1.1f : 0.9f;
+            var newZoom = currentZoom * zoomDelta;
+
+            // 限制缩放范围：最小为适应窗口，最大为1000%
+            newZoom = Math.Max(_minZoomFactor, Math.Min(10f, newZoom));
+
+            // 如果缩放比例没有变化，不执行操作
+            if (Math.Abs(newZoom - currentZoom) < 0.001f)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            // 获取鼠标相对于 ScrollViewer 的位置
+            var pointerPosition = e.GetCurrentPoint(ImageScrollViewer).Position;
+
+            // 计算当前鼠标位置对应的内容坐标
+            var contentX = ImageScrollViewer.HorizontalOffset + pointerPosition.X;
+            var contentY = ImageScrollViewer.VerticalOffset + pointerPosition.Y;
+
+            // 计算缩放后的新偏移量，保持鼠标位置不变
+            var scale = newZoom / currentZoom;
+            var newHorizontalOffset = contentX * scale - pointerPosition.X;
+            var newVerticalOffset = contentY * scale - pointerPosition.Y;
+
+            // 应用缩放
+            ImageScrollViewer.ChangeView(newHorizontalOffset, newVerticalOffset, newZoom, true);
+
+            e.Handled = true;
+        }
 
         private void FitToWindow_Click(object sender, RoutedEventArgs e)
         {
@@ -266,6 +327,111 @@ namespace Photo
         private void Zoom400_Click(object sender, RoutedEventArgs e)
         {
             ImageScrollViewer.ChangeView(null, null, 4.0f);
+        }
+
+        #endregion
+
+        #region 鼠标拖拽功能
+
+        private void ImageContainer_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_isImageLoaded) return;
+
+            var point = e.GetCurrentPoint(sender as UIElement);
+            
+            // 左键或中键都可以拖拽
+            if (point.Properties.IsLeftButtonPressed || point.Properties.IsMiddleButtonPressed)
+            {
+                _isDragging = true;
+                _lastPointerPosition = point.Position;
+                _dragStartScrollPosition = new Point(ImageScrollViewer.HorizontalOffset, ImageScrollViewer.VerticalOffset);
+                
+                // 捕获指针
+                if (sender is UIElement element)
+                {
+                    element.CapturePointer(e.Pointer);
+                    // 设置抓取光标 (使用 Hand 模拟手掌)
+                    SetElementCursor(element, InputSystemCursorShape.Hand);
+                }
+                
+                e.Handled = true;
+            }
+        }
+
+        private void ImageContainer_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_isDragging || !_isImageLoaded) return;
+
+            var currentPosition = e.GetCurrentPoint(sender as UIElement).Position;
+            
+            // 计算移动距离
+            var deltaX = _lastPointerPosition.X - currentPosition.X;
+            var deltaY = _lastPointerPosition.Y - currentPosition.Y;
+
+            // 更新滚动位置
+            var newHorizontalOffset = ImageScrollViewer.HorizontalOffset + deltaX;
+            var newVerticalOffset = ImageScrollViewer.VerticalOffset + deltaY;
+
+            ImageScrollViewer.ChangeView(newHorizontalOffset, newVerticalOffset, null, true);
+
+            _lastPointerPosition = currentPosition;
+            e.Handled = true;
+        }
+
+        private void ImageContainer_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (_isDragging)
+            {
+                _isDragging = false;
+                if (sender is UIElement element)
+                {
+                    element.ReleasePointerCapture(e.Pointer);
+                    // 恢复默认光标
+                    ResetElementCursor(element);
+                }
+                
+                e.Handled = true;
+            }
+        }
+
+        private void ImageContainer_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
+        {
+            _isDragging = false;
+            if (sender is UIElement element)
+            {
+                ResetElementCursor(element);
+            }
+        }
+
+        #endregion
+
+        #region 光标辅助方法
+
+        private void SetElementCursor(UIElement element, InputSystemCursorShape cursorShape)
+        {
+            try
+            {
+                var cursor = InputSystemCursor.Create(cursorShape);
+                var property = typeof(UIElement).GetProperty("ProtectedCursor", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                if (property != null)
+                {
+                    property.SetValue(element, cursor);
+                }
+            }
+            catch { }
+        }
+
+        private void ResetElementCursor(UIElement element)
+        {
+            try
+            {
+                var property = typeof(UIElement).GetProperty("ProtectedCursor", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                if (property != null)
+                {
+                    property.SetValue(element, null);
+                }
+            }
+            catch { }
         }
 
         #endregion
