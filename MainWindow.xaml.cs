@@ -46,6 +46,8 @@ namespace Photo
         private long _fileSize = 0;
         private bool _isImageLoaded = false;
         private List<StorageFile> _folderFiles = new List<StorageFile>();
+        private FileSystemWatcher? _fileWatcher;
+        private DispatcherTimer? _folderUpdateTimer;
 
         // 鼠标拖拽相关
         private bool _isDragging = false;
@@ -60,6 +62,7 @@ namespace Photo
             InitializeComponent();
             SetDarkTitleBar();
             SetupDragDrop();
+            InitializeFolderUpdateTimer();
             
             // 扩展标题栏
             ExtendsContentIntoTitleBar = true;
@@ -121,6 +124,75 @@ namespace Photo
             return imageExtensions.Contains(extension.ToLowerInvariant());
         }
 
+        private void InitializeFolderUpdateTimer()
+        {
+            _folderUpdateTimer = new DispatcherTimer();
+            _folderUpdateTimer.Interval = TimeSpan.FromMilliseconds(200);
+            _folderUpdateTimer.Tick += async (s, e) =>
+            {
+                _folderUpdateTimer.Stop();
+                await UpdateFileListAsync();
+                UpdateNavigationButtons();
+            };
+        }
+
+        private void SetupFileWatcher(string folderPath)
+        {
+            if (_fileWatcher != null && string.Equals(_fileWatcher.Path, folderPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (_fileWatcher != null)
+            {
+                _fileWatcher.EnableRaisingEvents = false;
+                _fileWatcher.Dispose();
+                _fileWatcher = null;
+            }
+
+            try
+            {
+                if (Directory.Exists(folderPath))
+                {
+                    _fileWatcher = new FileSystemWatcher(folderPath);
+                    _fileWatcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime;
+                    _fileWatcher.Filter = "*.*";
+                    _fileWatcher.Created += OnFileChanged;
+                    _fileWatcher.Deleted += OnFileChanged;
+                    _fileWatcher.Renamed += OnFileRenamed;
+                    _fileWatcher.EnableRaisingEvents = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Watcher error: {ex.Message}");
+            }
+        }
+
+        private void OnFileChanged(object sender, FileSystemEventArgs e)
+        {
+            if (IsImageFile(Path.GetExtension(e.FullPath)))
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    _folderUpdateTimer?.Stop();
+                    _folderUpdateTimer?.Start();
+                });
+            }
+        }
+
+        private void OnFileRenamed(object sender, RenamedEventArgs e)
+        {
+            if (IsImageFile(Path.GetExtension(e.OldFullPath)) || IsImageFile(Path.GetExtension(e.FullPath)))
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    _folderUpdateTimer?.Stop();
+                    _folderUpdateTimer?.Start();
+                });
+            }
+        }
+
         public async Task LoadImageFromPathAsync(string path)
         {
             try
@@ -142,6 +214,16 @@ namespace Photo
                 _currentFilePath = file.Path;
                 _rotationAngle = 0;
                 ImageRotateTransform.Angle = 0;
+
+                // Setup watcher
+                if (!string.IsNullOrEmpty(_currentFilePath))
+                {
+                    var folderPath = Path.GetDirectoryName(_currentFilePath);
+                    if (!string.IsNullOrEmpty(folderPath))
+                    {
+                        SetupFileWatcher(folderPath);
+                    }
+                }
 
                 // 加载图片
                 using (var stream = await file.OpenAsync(FileAccessMode.Read))
