@@ -17,7 +17,8 @@
   <Properties>
     <DisplayName>Photo</DisplayName>
     <PublisherDisplayName>caoji</PublisherDisplayName>
-    <Logo>Assets\StoreLogo.png</Logo>
+    <!-- Use an existing scale-qualified asset for the package logo -->
+    <Logo>Assets\Square150x150Logo.scale-100.png</Logo>
   </Properties>
 
   <Dependencies>
@@ -37,10 +38,10 @@
         DisplayName="Photo"
         Description="Photo"
         BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
-        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+        Square150x150Logo="Assets\Square150x150Logo.scale-100.png"
+        Square44x44Logo="Assets\Square44x44Logo.scale-100.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.scale-100.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.scale-100.png" />
       </uap:VisualElements>
       <Extensions>
         <uap:Extension Category="windows.fileTypeAssociation">
@@ -56,7 +57,8 @@
               <uap:FileType>.tiff</uap:FileType>
               <uap:FileType>.tif</uap:FileType>
             </uap:SupportedFileTypes>
-            <uap:Logo>Assets\StoreLogo.png</uap:Logo>
+            <!-- Use square logo as file association logo -->
+            <uap:Logo>Assets\Square150x150Logo.scale-100.png</uap:Logo>
             <uap:DisplayName>Image File</uap:DisplayName>
           </uap:FileTypeAssociation>
         </uap:Extension>
