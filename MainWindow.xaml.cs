@@ -241,6 +241,7 @@ namespace Photo
             {
                 UpdateZoomPercentage();
             }
+            UpdateCursor();
         }
 
         private void UpdateZoomPercentage()
@@ -290,6 +291,9 @@ namespace Photo
 
             // 应用缩放
             ImageScrollViewer.ChangeView(newHorizontalOffset, newVerticalOffset, newZoom, true);
+            
+            // 更新光标状态
+            UpdateCursor();
 
             e.Handled = true;
         }
@@ -350,10 +354,9 @@ namespace Photo
                 if (sender is UIElement element)
                 {
                     element.CapturePointer(e.Pointer);
-                    // 设置抓取光标 (使用 Hand 模拟手掌)
-                    SetElementCursor(element, InputSystemCursorShape.Hand);
                 }
                 
+                UpdateCursor();
                 e.Handled = true;
             }
         }
@@ -386,10 +389,9 @@ namespace Photo
                 if (sender is UIElement element)
                 {
                     element.ReleasePointerCapture(e.Pointer);
-                    // 恢复默认光标
-                    ResetElementCursor(element);
                 }
                 
+                UpdateCursor();
                 e.Handled = true;
             }
         }
@@ -397,15 +399,54 @@ namespace Photo
         private void ImageContainer_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
         {
             _isDragging = false;
-            if (sender is UIElement element)
-            {
-                ResetElementCursor(element);
-            }
+            UpdateCursor();
+        }
+
+        private void ImageContainer_PointerEntered(object sender, PointerRoutedEventArgs e)
+        {
+            UpdateCursor();
+        }
+
+        private void ImageContainer_PointerExited(object sender, PointerRoutedEventArgs e)
+        {
+            SetElementCursor(ImageContainerGrid, InputSystemCursorShape.Arrow);
         }
 
         #endregion
 
         #region 光标辅助方法
+
+        private void UpdateCursor()
+        {
+            if (!_isImageLoaded)
+            {
+                SetElementCursor(ImageContainerGrid, InputSystemCursorShape.Arrow);
+                return;
+            }
+
+            if (_isDragging)
+            {
+                // 拖拽时显示抓取手 (使用 SizeAll 模拟抓取状态，因为它最接近)
+                SetElementCursor(ImageContainerGrid, InputSystemCursorShape.SizeAll);
+            }
+            else
+            {
+                // 检查是否放大（可滚动）
+                // 注意：使用 ZoomFactor 判断可能更准确，或者 ScrollableWidth
+                bool isZoomed = ImageScrollViewer.ZoomFactor > _minZoomFactor + 0.001f;
+                
+                if (isZoomed)
+                {
+                    // 放大时显示手型 (模拟 Open Hand)
+                    SetElementCursor(ImageContainerGrid, InputSystemCursorShape.Hand);
+                }
+                else
+                {
+                    // 适应窗口时显示默认箭头
+                    SetElementCursor(ImageContainerGrid, InputSystemCursorShape.Arrow);
+                }
+            }
+        }
 
         private void SetElementCursor(UIElement element, InputSystemCursorShape cursorShape)
         {

@@ -60,12 +60,14 @@
         </Grid>
 
         <!-- 中间图片显示区域 -->
-        <Grid Grid.Row="1" Background="#1F1F1F"
+        <Grid x:Name="ImageContainerGrid" Grid.Row="1" Background="#1F1F1F"
               PointerWheelChanged="ImageContainer_PointerWheelChanged"
               PointerPressed="ImageContainer_PointerPressed"
               PointerMoved="ImageContainer_PointerMoved"
               PointerReleased="ImageContainer_PointerReleased"
-              PointerCaptureLost="ImageContainer_PointerCaptureLost">
+              PointerCaptureLost="ImageContainer_PointerCaptureLost"
+              PointerEntered="ImageContainer_PointerEntered"
+              PointerExited="ImageContainer_PointerExited">
             <ScrollViewer x:Name="ImageScrollViewer" 
                           ZoomMode="Disabled"
                           HorizontalScrollMode="Enabled"
