@@ -31,6 +31,11 @@ namespace Photo
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        private const int SW_MAXIMIZE = 3;
+
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
         private StorageFile? _currentFile;
@@ -58,6 +63,14 @@ namespace Photo
             // 扩展标题栏
             ExtendsContentIntoTitleBar = true;
             SetTitleBar(null);
+            
+            // 启动时默认最大化窗口
+            try
+            {
+                var hwnd = WindowNative.GetWindowHandle(this);
+                ShowWindow(hwnd, SW_MAXIMIZE);
+            }
+            catch { }
         }
 
         private void SetDarkTitleBar()
