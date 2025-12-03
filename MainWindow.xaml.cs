@@ -291,7 +291,7 @@ namespace Photo
             var newHorizontalOffset = contentX * scale - pointerPosition.X;
             var newVerticalOffset = contentY * scale - pointerPosition.Y;
 
-            ImageScrollViewer.ChangeView(newHorizontalOffset, newVerticalOffset, newZoom, true);
+            ImageScrollViewer.ChangeView(newHorizontalOffset, newVerticalOffset, newZoom, false);
             UpdateCursor();
 
             e.Handled = true;
