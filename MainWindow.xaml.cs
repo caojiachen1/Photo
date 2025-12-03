@@ -747,20 +747,23 @@ namespace Photo
 
             try
             {
-                // 记录要切换到的文件
+                // 记录要切换到的文件（优先切换到下一张，如果没有则切换到上一张）
                 StorageFile? targetFile = null;
                 if (_folderFiles.Count > 1)
                 {
                     int currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile.Path);
-                    if (currentIndex > 0)
+                    if (currentIndex >= 0)
                     {
-                        // 优先切换到上一张
-                        targetFile = _folderFiles[currentIndex - 1];
-                    }
-                    else if (currentIndex == 0 && _folderFiles.Count > 1)
-                    {
-                        // 如果是第一张，则切换到下一张（现在的第二张）
-                        targetFile = _folderFiles[currentIndex + 1];
+                        // 优先切换到下一张
+                        if (currentIndex < _folderFiles.Count - 1)
+                        {
+                            targetFile = _folderFiles[currentIndex + 1];
+                        }
+                        else if (currentIndex > 0)
+                        {
+                            // 如果是最后一张，则切换到上一张
+                            targetFile = _folderFiles[currentIndex - 1];
+                        }
                     }
                 }
 
