@@ -469,7 +469,18 @@ namespace Photo.ViewModels
         {
             if (_imageService.IsImageFile(file.FileType))
             {
-                await LoadImageAsync(file, true);
+                // 通过路径重新获取文件，以获得完整的读写权限
+                // 拖拽进来的 StorageFile 是只读的，无法进行旋转等修改操作
+                try
+                {
+                    var fileWithAccess = await StorageFile.GetFileFromPathAsync(file.Path);
+                    await LoadImageAsync(fileWithAccess, true);
+                }
+                catch
+                {
+                    // 如果无法获取完整权限（例如系统保护目录），则使用原始只读文件
+                    await LoadImageAsync(file, true);
+                }
             }
         }
 
