@@ -7,7 +7,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="Photo">
+    Title="{x:Bind ViewModel.WindowTitle, Mode=OneWay}">
 
     <Window.SystemBackdrop>
         <MicaBackdrop />
@@ -57,7 +57,7 @@
         </Grid.RowDefinitions>
 
         <!-- 顶部工具栏 -->
-        <Grid x:Name="TopToolbar" Grid.Row="0" Background="#1F1F1F">
+        <Grid x:Name="TopToolbar" Grid.Row="0" Background="#1F1F1F" Visibility="{x:Bind ViewModel.ToolbarVisibility, Mode=OneWay}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -67,12 +67,12 @@
             <!-- 左侧按钮组 -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
                 <!-- 旋转按钮 -->
-                <Button x:Name="TopRotateButton" ToolTipService.ToolTip="旋转" Click="RotateButton_Click">
+                <Button x:Name="TopRotateButton" ToolTipService.ToolTip="旋转" Command="{x:Bind ViewModel.RotateCommand}">
                     <FontIcon Glyph="&#xE7AD;" FontSize="16"/>
                 </Button>
 
                 <!-- 删除按钮 -->
-                <Button x:Name="DeleteButton" ToolTipService.ToolTip="删除" Click="DeleteButton_Click" Margin="4,0,0,0">
+                <Button x:Name="DeleteButton" ToolTipService.ToolTip="删除" Command="{x:Bind ViewModel.DeleteCommand}" Margin="4,0,0,0">
                     <FontIcon Glyph="&#xE74D;" FontSize="16"/>
                 </Button>
 
@@ -81,7 +81,7 @@
                     <FontIcon Glyph="&#xE712;" FontSize="16"/>
                     <Button.Flyout>
                         <MenuFlyout Placement="Bottom">
-                            <MenuFlyoutItem x:Name="SaveAsMenuItem" Text="另存为" Click="SaveAsButton_Click">
+                            <MenuFlyoutItem x:Name="SaveAsMenuItem" Text="另存为" Command="{x:Bind ViewModel.SaveAsCommand}">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE792;"/>
                                 </MenuFlyoutItem.Icon>
@@ -89,7 +89,7 @@
                                     <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
                                 </MenuFlyoutItem.KeyboardAccelerators>
                             </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Name="CopyMenuItem" Text="复制" Click="CopyButton_Click">
+                            <MenuFlyoutItem x:Name="CopyMenuItem" Text="复制" Command="{x:Bind ViewModel.CopyCommand}">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xE8C8;"/>
                                 </MenuFlyoutItem.Icon>
@@ -97,7 +97,7 @@
                                     <KeyboardAccelerator Modifiers="Control" Key="C"/>
                                 </MenuFlyoutItem.KeyboardAccelerators>
                             </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Name="OpenInExplorerMenuItem" Text="在文件资源管理器中打开" Click="OpenInExplorerButton_Click">
+                            <MenuFlyoutItem x:Name="OpenInExplorerMenuItem" Text="在文件资源管理器中打开" Command="{x:Bind ViewModel.OpenInExplorerCommand}">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xEC50;"/>
                                 </MenuFlyoutItem.Icon>
@@ -115,7 +115,7 @@
 
             <!-- 中间文件名 -->
             <TextBlock x:Name="FileNameText" Grid.Column="1" 
-                       Text="" 
+                       Text="{x:Bind ViewModel.FileName, Mode=OneWay}" 
                        VerticalAlignment="Center" 
                        HorizontalAlignment="Center"
                        FontSize="14"/>
@@ -148,8 +148,8 @@
                     VerticalAlignment="Stretch"
                     Margin="0"
                     Width="60"
-                    Click="PreviousButton_Click"
-                    Visibility="Collapsed"
+                    Command="{x:Bind ViewModel.NavigatePreviousCommand}"
+                    Visibility="{x:Bind ViewModel.PreviousButtonVisibility, Mode=OneWay}"
                     Canvas.ZIndex="10">
                 <FontIcon Glyph="&#xE76B;" FontSize="20"/>
             </Button>
@@ -160,8 +160,8 @@
                     VerticalAlignment="Stretch"
                     Margin="0"
                     Width="60"
-                    Click="NextButton_Click"
-                    Visibility="Collapsed"
+                    Command="{x:Bind ViewModel.NavigateNextCommand}"
+                    Visibility="{x:Bind ViewModel.NextButtonVisibility, Mode=OneWay}"
                     Canvas.ZIndex="10">
                 <FontIcon Glyph="&#xE76C;" FontSize="20"/>
             </Button>
@@ -179,6 +179,7 @@
                           VerticalAlignment="Stretch"
                           IsHitTestVisible="False">
                 <Image x:Name="MainImage" 
+                       Source="{x:Bind ViewModel.ImageSource, Mode=OneWay}"
                        Stretch="Uniform"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
@@ -193,7 +194,7 @@
             <StackPanel x:Name="PlaceholderPanel" 
                         HorizontalAlignment="Center" 
                         VerticalAlignment="Center"
-                        Visibility="Visible">
+                        Visibility="{x:Bind ViewModel.PlaceholderVisibility, Mode=OneWay}">
                 <FontIcon Glyph="&#xEB9F;" FontSize="120" Foreground="#4A4A6A"/>
                 <TextBlock Text="拖放图片到此处或使用文件打开" 
                            Foreground="#888888" 
@@ -203,10 +204,10 @@
         </Grid>
 
         <!-- 缩略图条 -->
-        <Grid x:Name="ThumbnailBar" Grid.Row="2" Background="#252525" Height="88" Visibility="Collapsed">
+        <Grid x:Name="ThumbnailBar" Grid.Row="2" Background="#252525" Height="88" Visibility="{x:Bind ViewModel.ThumbnailBarVisibility, Mode=OneWay}">
             <!-- 缩略图列表 -->
             <ListView x:Name="ThumbnailListView" 
-                      ItemsSource="{x:Bind ThumbnailItems}"
+                      ItemsSource="{x:Bind ViewModel.ThumbnailItems}"
                       SelectionMode="Single"
                       SelectionChanged="ThumbnailListView_SelectionChanged"
                       ScrollViewer.HorizontalScrollMode="Enabled"
@@ -256,7 +257,7 @@
         </Grid>
 
         <!-- 底部状态栏 -->
-        <Grid x:Name="BottomStatusBar" Grid.Row="3" Background="#2D2D2D">
+        <Grid x:Name="BottomStatusBar" Grid.Row="3" Background="#2D2D2D" Visibility="{x:Bind ViewModel.ToolbarVisibility, Mode=OneWay}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -266,32 +267,32 @@
             <!-- 左侧信息 -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" Margin="12,0,0,0" VerticalAlignment="Center">
                 <!-- 缩略图切换按钮 -->
-                <Button x:Name="ThumbnailToggleButton" ToolTipService.ToolTip="显示/隐藏缩略图" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="ThumbnailToggleButton_Click">
-                    <FontIcon x:Name="ThumbnailToggleIcon" Glyph="&#xE8FD;" FontSize="14"/>
+                <Button x:Name="ThumbnailToggleButton" ToolTipService.ToolTip="{x:Bind ViewModel.ThumbnailToggleTooltip, Mode=OneWay}" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ToggleThumbnailBarCommand}">
+                    <FontIcon x:Name="ThumbnailToggleIcon" Glyph="{x:Bind ViewModel.ThumbnailToggleIcon, Mode=OneWay}" FontSize="14"/>
                 </Button>
 
                 <!-- 文件信息按钮 -->
-                <Button x:Name="FileInfoButton" ToolTipService.ToolTip="文件信息" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="FileInfoButton_Click">
+                <Button x:Name="FileInfoButton" ToolTipService.ToolTip="文件信息" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ToggleFileInfoCommand}">
                     <FontIcon Glyph="&#xE946;" FontSize="14"/>
                 </Button>
 
                 <!-- 图片尺寸 -->
                 <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <FontIcon Glyph="&#xE91B;" FontSize="12" Foreground="#888888"/>
-                    <TextBlock x:Name="ImageDimensionsText" Text="" Foreground="#888888" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ImageDimensionsText" Text="{x:Bind ViewModel.ImageDimensions, Mode=OneWay}" Foreground="#888888" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- 文件大小 -->
                 <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <FontIcon Glyph="&#xE7C3;" FontSize="12" Foreground="#888888"/>
-                    <TextBlock x:Name="FileSizeText" Text="" Foreground="#888888" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="FileSizeText" Text="{x:Bind ViewModel.FileSize, Mode=OneWay}" Foreground="#888888" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
             </StackPanel>
 
             <!-- 右侧缩放控制 -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="0,0,12,0" VerticalAlignment="Center">
                 <!-- 旋转按钮 -->
-                <Button x:Name="RotateButton" ToolTipService.ToolTip="旋转" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="RotateButton_Click">
+                <Button x:Name="RotateButton" ToolTipService.ToolTip="旋转" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.RotateCommand}">
                     <FontIcon Glyph="&#xE7AD;" FontSize="14"/>
                 </Button>
 
@@ -299,12 +300,12 @@
                 <Border Width="1" Height="20" Background="#444444" Margin="8,0"/>
 
                 <!-- 适应窗口 -->
-                <Button x:Name="FitToWindowButton" ToolTipService.ToolTip="适应窗口" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="FitToWindow_Click">
+                <Button x:Name="FitToWindowButton" ToolTipService.ToolTip="适应窗口" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.FitToWindowCommand}">
                     <FontIcon Glyph="&#xE73F;" FontSize="14"/>
                 </Button>
 
                 <!-- 实际大小 (改为显示 1:1 文本，表示实际尺寸) -->
-                <Button x:Name="ActualSizeButton" ToolTipService.ToolTip="实际大小 (1:1)" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="ActualSize_Click">
+                <Button x:Name="ActualSizeButton" ToolTipService.ToolTip="实际大小 (1:1)" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ActualSizeCommand}">
                     <TextBlock Text="1:1" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
                 </Button>
 
@@ -313,23 +314,23 @@
 
                 <!-- 缩放百分比下拉菜单 -->
                 <DropDownButton x:Name="ZoomButton" ToolTipService.ToolTip="缩放" MinWidth="60" Background="Transparent" BorderBrush="Transparent">
-                    <TextBlock x:Name="ZoomPercentText" Text="100%" FontSize="12"/>
+                    <TextBlock x:Name="ZoomPercentText" Text="{x:Bind ViewModel.ZoomPercent, Mode=OneWay}" FontSize="12"/>
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">
-                            <MenuFlyoutItem Text="适应窗口" Click="FitToWindow_Click"/>
-                            <MenuFlyoutItem Text="实际大小 (100%)" Click="ActualSize_Click"/>
+                            <MenuFlyoutItem Text="适应窗口" Command="{x:Bind ViewModel.FitToWindowCommand}"/>
+                            <MenuFlyoutItem Text="实际大小 (100%)" Command="{x:Bind ViewModel.ActualSizeCommand}"/>
                             <MenuFlyoutSeparator/>
-                            <MenuFlyoutItem Text="25%" Click="Zoom25_Click"/>
-                            <MenuFlyoutItem Text="50%" Click="Zoom50_Click"/>
-                            <MenuFlyoutItem Text="100%" Click="Zoom100_Click"/>
-                            <MenuFlyoutItem Text="200%" Click="Zoom200_Click"/>
-                            <MenuFlyoutItem Text="400%" Click="Zoom400_Click"/>
+                            <MenuFlyoutItem Text="25%" Command="{x:Bind ViewModel.Zoom25Command}"/>
+                            <MenuFlyoutItem Text="50%" Command="{x:Bind ViewModel.Zoom50Command}"/>
+                            <MenuFlyoutItem Text="100%" Command="{x:Bind ViewModel.Zoom100Command}"/>
+                            <MenuFlyoutItem Text="200%" Command="{x:Bind ViewModel.Zoom200Command}"/>
+                            <MenuFlyoutItem Text="400%" Command="{x:Bind ViewModel.Zoom400Command}"/>
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
 
                 <!-- 缩小按钮 -->
-                <Button x:Name="ZoomOutButton" ToolTipService.ToolTip="缩小" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="ZoomOut_Click" VerticalAlignment="Center">
+                <Button x:Name="ZoomOutButton" ToolTipService.ToolTip="缩小" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ZoomOutCommand}" VerticalAlignment="Center">
                     <FontIcon Glyph="&#xE71F;" FontSize="14"/>
                 </Button>
 
@@ -338,14 +339,12 @@
                         Width="120" 
                         Minimum="10" 
                         Maximum="400" 
-                        Value="100" 
+                        Value="{x:Bind ViewModel.ZoomSliderValue, Mode=TwoWay}" 
                         VerticalAlignment="Center"
-                        ValueChanged="ZoomSlider_ValueChanged"
-                        PointerPressed="ZoomSlider_PointerPressed"
-                        PointerReleased="ZoomSlider_PointerReleased"/>
+                        ValueChanged="ZoomSlider_ValueChanged"/>
 
                 <!-- 放大按钮 -->
-                <Button x:Name="ZoomInButton" ToolTipService.ToolTip="放大" Background="Transparent" BorderBrush="Transparent" Padding="4" Click="ZoomIn_Click" VerticalAlignment="Center">
+                <Button x:Name="ZoomInButton" ToolTipService.ToolTip="放大" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ZoomInCommand}" VerticalAlignment="Center">
                     <FontIcon Glyph="&#xE8A3;" FontSize="14"/>
                 </Button>
 
@@ -354,13 +353,13 @@
 
                 <!-- 全屏按钮 -->
                 <Button x:Name="FullScreenButton" 
-                        ToolTipService.ToolTip="全屏" 
+                        ToolTipService.ToolTip="{x:Bind ViewModel.FullScreenTooltip, Mode=OneWay}" 
                         Background="Transparent" 
                         BorderBrush="Transparent" 
                         Padding="4" 
-                        Click="FullScreenButton_Click"
+                        Command="{x:Bind ViewModel.ToggleFullScreenCommand}"
                         VerticalAlignment="Center">
-                    <FontIcon x:Name="FullScreenIcon" Glyph="&#xE740;" FontSize="14"/>
+                    <FontIcon x:Name="FullScreenIcon" Glyph="{x:Bind ViewModel.FullScreenIcon, Mode=OneWay}" FontSize="14"/>
                 </Button>
             </StackPanel>
         </Grid>
@@ -371,7 +370,7 @@
               VerticalAlignment="Stretch"
               Width="320"
               Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}"
-              Visibility="Collapsed">
+              Visibility="{x:Bind ViewModel.FileInfoPanelVisibility, Mode=OneWay}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -382,7 +381,7 @@
                 <Button HorizontalAlignment="Right" 
                         Background="Transparent" 
                         BorderBrush="Transparent" 
-                        Click="CloseFileInfoPanel_Click"
+                        Command="{x:Bind ViewModel.CloseFileInfoCommand}"
                         Padding="4">
                     <FontIcon Glyph="&#xE711;" FontSize="12"/>
                 </Button>
@@ -393,43 +392,43 @@
                     <!-- 文件名 -->
                     <StackPanel>
                         <TextBlock Text="文件名" Foreground="#888888" FontSize="12"/>
-                        <TextBlock x:Name="InfoFileName" Text="" FontSize="14" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="InfoFileName" Text="{x:Bind ViewModel.InfoFileName, Mode=OneWay}" FontSize="14" TextWrapping="Wrap" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- 文件路径 -->
                     <StackPanel>
                         <TextBlock Text="位置" Foreground="#888888" FontSize="12"/>
-                        <TextBlock x:Name="InfoFilePath" Text="" FontSize="14" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="InfoFilePath" Text="{x:Bind ViewModel.InfoFilePath, Mode=OneWay}" FontSize="14" TextWrapping="Wrap" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- 文件类型 -->
                     <StackPanel>
                         <TextBlock Text="类型" Foreground="#888888" FontSize="12"/>
-                        <TextBlock x:Name="InfoFileType" Text="" FontSize="14" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="InfoFileType" Text="{x:Bind ViewModel.InfoFileType, Mode=OneWay}" FontSize="14" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- 尺寸 -->
                     <StackPanel>
                         <TextBlock Text="尺寸" Foreground="#888888" FontSize="12"/>
-                        <TextBlock x:Name="InfoDimensions" Text="" FontSize="14" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="InfoDimensions" Text="{x:Bind ViewModel.InfoDimensions, Mode=OneWay}" FontSize="14" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- 文件大小 -->
                     <StackPanel>
                         <TextBlock Text="大小" Foreground="#888888" FontSize="12"/>
-                        <TextBlock x:Name="InfoFileSize" Text="" FontSize="14" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="InfoFileSize" Text="{x:Bind ViewModel.InfoFileSize, Mode=OneWay}" FontSize="14" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- 创建日期 -->
                     <StackPanel>
                         <TextBlock Text="创建日期" Foreground="#888888" FontSize="12"/>
-                        <TextBlock x:Name="InfoCreatedDate" Text="" FontSize="14" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="InfoCreatedDate" Text="{x:Bind ViewModel.InfoCreatedDate, Mode=OneWay}" FontSize="14" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- 修改日期 -->
                     <StackPanel>
                         <TextBlock Text="修改日期" Foreground="#888888" FontSize="12"/>
-                        <TextBlock x:Name="InfoModifiedDate" Text="" FontSize="14" Margin="0,4,0,0"/>
+                        <TextBlock x:Name="InfoModifiedDate" Text="{x:Bind ViewModel.InfoModifiedDate, Mode=OneWay}" FontSize="14" Margin="0,4,0,0"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
