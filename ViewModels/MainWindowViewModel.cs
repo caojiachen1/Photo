@@ -520,6 +520,10 @@ namespace Photo.ViewModels
             {
                 await NavigateAsync(1);
             }
+            else if (key == Windows.System.VirtualKey.Delete)
+            {
+                await DeleteAsync();
+            }
         }
 
         #endregion
