@@ -14,6 +14,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Storage;
 using WinRT.Interop;
+using System.Collections.Specialized;
 
 namespace Photo
 {
@@ -73,6 +74,11 @@ namespace Photo
                 explorerService,
                 dispatcherQueue);
 
+            if (Content is FrameworkElement rootElement)
+            {
+                rootElement.DataContext = ViewModel;
+            }
+
             // 设置 DialogService 的依赖
             var hwnd = WindowNative.GetWindowHandle(this);
             dialogService.SetWindowHandle(hwnd);
@@ -92,6 +98,7 @@ namespace Photo
             ViewModel.ThumbnailSelectionChanged += ScrollToCurrentThumbnail;
             ViewModel.SettingsRequested += OnSettingsRequested;
             ViewModel.ZoomSliderValueChanged += OnZoomSliderValueChanged;
+            ViewModel.FaceRegions.CollectionChanged += FaceRegions_CollectionChanged;
 
             // 初始化窗口
             SetDarkTitleBar();
@@ -521,6 +528,103 @@ namespace Photo
             if (result == ContentDialogResult.Primary)
             {
                 AppSettings.ConfirmBeforeDelete = dialog.ConfirmBeforeDelete;
+            }
+        }
+
+        private void FaceRegions_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            UpdateFaceOverlay();
+        }
+
+        private void MainImage_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateFaceOverlay();
+        }
+
+        private void UpdateFaceOverlay()
+        {
+            if (FaceOverlayCanvas == null) return;
+
+            FaceOverlayCanvas.Children.Clear();
+
+            var imageWidth = MainImage.ActualWidth;
+            var imageHeight = MainImage.ActualHeight;
+
+            if (imageWidth <= 0 || imageHeight <= 0) return;
+
+            // 设置 Canvas 大小与图片一致
+            FaceOverlayCanvas.Width = imageWidth;
+            FaceOverlayCanvas.Height = imageHeight;
+
+            System.Diagnostics.Debug.WriteLine($"UpdateFaceOverlay: Image size = {imageWidth} x {imageHeight}, Regions count = {ViewModel.FaceRegions.Count}");
+
+            foreach (var region in ViewModel.FaceRegions)
+            {
+                var x = region.X * imageWidth;
+                var y = region.Y * imageHeight;
+                var w = region.Width * imageWidth;
+                var h = region.Height * imageHeight;
+
+                System.Diagnostics.Debug.WriteLine($"Drawing face: {region.Name} at ({x}, {y}, {w}, {h})");
+
+                // 创建可见的人脸框（默认不可见）
+                var faceBox = new Border
+                {
+                    BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Yellow),
+                    BorderThickness = new Thickness(2),
+                    Width = w,
+                    Height = h,
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    Opacity = 0,  // 默认不可见
+                    IsHitTestVisible = false  // 不参与命中测试
+                };
+
+                // 添加人名标签
+                if (!string.IsNullOrEmpty(region.Name))
+                {
+                    var textBlock = new TextBlock
+                    {
+                        Text = region.Name,
+                        Foreground = new SolidColorBrush(Microsoft.UI.Colors.Yellow),
+                        FontSize = 12,
+                        FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                        Margin = new Thickness(2, -18, 0, 0)
+                    };
+                    faceBox.Child = textBlock;
+                }
+
+                ToolTipService.SetToolTip(faceBox, region.Name);
+
+                Canvas.SetLeft(faceBox, x);
+                Canvas.SetTop(faceBox, y);
+
+                // 创建透明的悬停检测区域（比人脸框稍大一些）
+                var padding = 0.0;  // 扩展检测区域
+                var hitArea = new Border
+                {
+                    Width = w + padding * 2,
+                    Height = h + padding * 2,
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+                };
+
+                Canvas.SetLeft(hitArea, x - padding);
+                Canvas.SetTop(hitArea, y - padding);
+
+                // 鼠标进入时显示人脸框
+                hitArea.PointerEntered += (s, e) =>
+                {
+                    faceBox.Opacity = 1;
+                };
+
+                // 鼠标离开时隐藏人脸框
+                hitArea.PointerExited += (s, e) =>
+                {
+                    faceBox.Opacity = 0;
+                };
+
+                // 先添加检测区域，再添加人脸框（确保人脸框在上层显示）
+                FaceOverlayCanvas.Children.Add(hitArea);
+                FaceOverlayCanvas.Children.Add(faceBox);
             }
         }
 

@@ -8,6 +8,11 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
+using MetadataExtractor;
+using MetadataExtractor.Formats.Xmp;
+using MetadataExtractor.Formats.Exif;
+using MetadataExtractor.Formats.Iptc;
+using XmpCore;
 
 namespace Photo.Services
 {
@@ -26,6 +31,18 @@ namespace Photo.Services
     }
 
     /// <summary>
+    /// 人脸区域信息
+    /// </summary>
+    public class FaceRegion
+    {
+        public string Name { get; set; } = string.Empty;
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+    }
+
+    /// <summary>
     /// 图片信息
     /// </summary>
     public class ImageInfo
@@ -39,6 +56,17 @@ namespace Photo.Services
         public string FileType { get; set; } = string.Empty;
         public DateTimeOffset CreatedDate { get; set; }
         public DateTimeOffset ModifiedDate { get; set; }
+
+        // Metadata
+        public List<string> Keywords { get; set; } = new();
+        public List<string> People { get; set; } = new();
+        public List<FaceRegion> FaceRegions { get; set; } = new();
+        public string CameraModel { get; set; } = string.Empty;
+        public string FNumber { get; set; } = string.Empty;
+        public string ExposureTime { get; set; } = string.Empty;
+        public string ISO { get; set; } = string.Empty;
+        public string FocalLength { get; set; } = string.Empty;
+        public DateTime? DateTimeOriginal { get; set; }
     }
 
     /// <summary>
@@ -87,11 +115,233 @@ namespace Photo.Services
                 imageInfo.ModifiedDate = properties.DateModified;
                 imageInfo.CreatedDate = properties.ItemDate;
 
+                // 提取元数据
+                await ExtractMetadataAsync(file, imageInfo);
+
                 return imageInfo;
             }
             catch
             {
                 return null;
+            }
+        }
+
+        private async Task ExtractMetadataAsync(StorageFile file, ImageInfo imageInfo)
+        {
+            try
+            {
+                using var stream = await file.OpenStreamForReadAsync();
+                var directories = ImageMetadataReader.ReadMetadata(stream);
+
+                // Exif
+                var exifSubIfdDirectory = directories.OfType<ExifSubIfdDirectory>().FirstOrDefault();
+                if (exifSubIfdDirectory != null)
+                {
+                    imageInfo.DateTimeOriginal = exifSubIfdDirectory.GetDescription(ExifDirectoryBase.TagDateTimeOriginal) is string dateStr 
+                        ? (DateTime.TryParseExact(dateStr, "yyyy:MM:dd HH:mm:ss", null, System.Globalization.DateTimeStyles.None, out var dt) ? dt : null) 
+                        : null;
+                    imageInfo.FNumber = exifSubIfdDirectory.GetDescription(ExifDirectoryBase.TagFNumber) ?? "";
+                    imageInfo.ExposureTime = exifSubIfdDirectory.GetDescription(ExifDirectoryBase.TagExposureTime) ?? "";
+                    imageInfo.ISO = exifSubIfdDirectory.GetDescription(ExifDirectoryBase.TagIsoEquivalent) ?? "";
+                    imageInfo.FocalLength = exifSubIfdDirectory.GetDescription(ExifDirectoryBase.TagFocalLength) ?? "";
+                }
+
+                var exifIfd0Directory = directories.OfType<ExifIfd0Directory>().FirstOrDefault();
+                if (exifIfd0Directory != null)
+                {
+                    imageInfo.CameraModel = exifIfd0Directory.GetDescription(ExifDirectoryBase.TagModel) ?? "";
+                }
+
+                // IPTC Keywords
+                var iptcDirectory = directories.OfType<IptcDirectory>().FirstOrDefault();
+                if (iptcDirectory != null)
+                {
+                    var keywords = iptcDirectory.GetDescription(IptcDirectory.TagKeywords);
+                    if (keywords != null)
+                    {
+                        imageInfo.Keywords.Add(keywords);
+                    }
+                }
+
+                // XMP
+                var xmpDirectory = directories.OfType<XmpDirectory>().FirstOrDefault();
+                if (xmpDirectory != null && xmpDirectory.XmpMeta != null)
+                {
+                    var xmp = xmpDirectory.XmpMeta;
+
+                    // Keywords (dc:subject)
+                    try 
+                    {
+                        var subjects = xmp.GetProperty(XmpConstants.NsDC, "subject");
+                        if (subjects != null)
+                        {
+                            // XMP subject is usually a Bag
+                            var count = xmp.CountArrayItems(XmpConstants.NsDC, "subject");
+                            for (int i = 1; i <= count; i++)
+                            {
+                                var item = xmp.GetArrayItem(XmpConstants.NsDC, "subject", i);
+                                if (item != null && !string.IsNullOrEmpty(item.Value) && !imageInfo.Keywords.Contains(item.Value))
+                                {
+                                    imageInfo.Keywords.Add(item.Value);
+                                }
+                            }
+                        }
+                    }
+                    catch {}
+
+                    // Microsoft Photo Regions - try multiple approaches
+                    try
+                    {
+                        // Check for Microsoft Photo 1.2 regions
+                        string nsMP = "http://ns.microsoft.com/photo/1.2/";
+                        string nsMPRI = "http://ns.microsoft.com/photo/1.2/t/RegionInfo#";
+                        string nsMPReg = "http://ns.microsoft.com/photo/1.2/t/Region#";
+
+                        // Try to read RegionInfo structure
+                        // First, check if RegionInfo exists
+                        if (xmp.DoesPropertyExist(nsMP, "RegionInfo"))
+                        {
+                            System.Diagnostics.Debug.WriteLine("Found RegionInfo in XMP");
+                            
+                            // Try different path formats
+                            string[] pathFormats = new[] {
+                                "RegionInfo/MPRI:Regions",
+                                "RegionInfo/Regions"
+                            };
+                            
+                            int count = 0;
+                            string workingPath = "";
+                            
+                            foreach (var pathFormat in pathFormats)
+                            {
+                                try {
+                                    count = xmp.CountArrayItems(nsMP, pathFormat);
+                                    System.Diagnostics.Debug.WriteLine($"Trying path {pathFormat}: count = {count}");
+                                    if (count > 0) {
+                                        workingPath = pathFormat;
+                                        break;
+                                    }
+                                } catch (Exception ex) {
+                                    System.Diagnostics.Debug.WriteLine($"Path {pathFormat} failed: {ex.Message}");
+                                }
+                            }
+                            
+                            // Also try with nsMPRI namespace
+                            if (count == 0)
+                            {
+                                try {
+                                    count = xmp.CountArrayItems(nsMPRI, "Regions");
+                                    if (count > 0) {
+                                        workingPath = "Regions";
+                                        System.Diagnostics.Debug.WriteLine($"Found {count} regions using nsMPRI:Regions");
+                                    }
+                                } catch {}
+                            }
+                            
+                            System.Diagnostics.Debug.WriteLine($"Final: Found {count} face regions using path: {workingPath}");
+                            
+                            if (count > 0)
+                            {
+                                for (int i = 1; i <= count; i++)
+                                {
+                                    string itemPath = workingPath + "[" + i + "]";
+                                    
+                                    string name = "";
+                                    string rect = "";
+                                    
+                                    // Try different namespace combinations for PersonDisplayName
+                                    string[] fieldNamespaces = new[] { nsMPReg, nsMP, nsMPRI };
+                                    foreach (var ns in fieldNamespaces)
+                                    {
+                                        try {
+                                            var nameProp = xmp.GetStructField(nsMP, itemPath, ns, "PersonDisplayName");
+                                            if (nameProp != null && !string.IsNullOrEmpty(nameProp.Value)) {
+                                                name = nameProp.Value;
+                                                System.Diagnostics.Debug.WriteLine($"Found PersonDisplayName using ns {ns}: {name}");
+                                                break;
+                                            }
+                                        } catch {}
+                                    }
+                                    
+                                    // Try different namespace combinations for Rectangle
+                                    foreach (var ns in fieldNamespaces)
+                                    {
+                                        try {
+                                            var rectProp = xmp.GetStructField(nsMP, itemPath, ns, "Rectangle");
+                                            if (rectProp != null && !string.IsNullOrEmpty(rectProp.Value)) {
+                                                rect = rectProp.Value;
+                                                System.Diagnostics.Debug.WriteLine($"Found Rectangle using ns {ns}: {rect}");
+                                                break;
+                                            }
+                                        } catch {}
+                                    }
+                                    
+                                    System.Diagnostics.Debug.WriteLine($"Region {i}: Name='{name}', Rect='{rect}'");
+                                        
+                                    if (!string.IsNullOrEmpty(rect))
+                                    {
+                                        // Rectangle format: "x, y, w, h" (with spaces after commas)
+                                        var parts = rect.Split(',');
+                                        if (parts.Length == 4)
+                                        {
+                                            if (double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double x) &&
+                                                double.TryParse(parts[1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double y) &&
+                                                double.TryParse(parts[2].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double w) &&
+                                                double.TryParse(parts[3].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double h))
+                                            {
+                                                imageInfo.FaceRegions.Add(new FaceRegion
+                                                {
+                                                    Name = name,
+                                                    X = x,
+                                                    Y = y,
+                                                    Width = w,
+                                                    Height = h
+                                                });
+                                                
+                                                System.Diagnostics.Debug.WriteLine($"Added face region: {name} at ({x}, {y}, {w}, {h})");
+                                                
+                                                if (!string.IsNullOrEmpty(name) && !imageInfo.People.Contains(name))
+                                                {
+                                                    imageInfo.People.Add(name);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine("No RegionInfo found in XMP");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Error parsing XMP regions: " + ex.Message);
+                    }
+                    
+                    // Also try to read from raw XMP string as fallback
+                    if (imageInfo.FaceRegions.Count == 0)
+                    {
+                        try
+                        {
+                            var xmpRaw = xmpDirectory.GetDescription(XmpDirectory.TagXmpValueCount);
+                            System.Diagnostics.Debug.WriteLine($"XMP raw description: {xmpRaw}");
+                            
+                            // Try to iterate all properties
+                            var props = xmpDirectory.Tags;
+                            foreach (var tag in props)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"XMP Tag: {tag.Name} = {tag.Description}");
+                            }
+                        }
+                        catch {}
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Error extracting metadata: " + ex.Message);
             }
         }
 

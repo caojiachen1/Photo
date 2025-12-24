@@ -245,6 +245,32 @@ namespace Photo.ViewModels
             set => SetProperty(ref _infoModifiedDate, value);
         }
 
+        private string _infoCameraModel = string.Empty;
+        public string InfoCameraModel { get => _infoCameraModel; set => SetProperty(ref _infoCameraModel, value); }
+
+        private string _infoFNumber = string.Empty;
+        public string InfoFNumber { get => _infoFNumber; set => SetProperty(ref _infoFNumber, value); }
+
+        private string _infoExposureTime = string.Empty;
+        public string InfoExposureTime { get => _infoExposureTime; set => SetProperty(ref _infoExposureTime, value); }
+
+        private string _infoISO = string.Empty;
+        public string InfoISO { get => _infoISO; set => SetProperty(ref _infoISO, value); }
+
+        private string _infoFocalLength = string.Empty;
+        public string InfoFocalLength { get => _infoFocalLength; set => SetProperty(ref _infoFocalLength, value); }
+
+        private string _infoDateTimeOriginal = string.Empty;
+        public string InfoDateTimeOriginal { get => _infoDateTimeOriginal; set => SetProperty(ref _infoDateTimeOriginal, value); }
+
+        private string _infoKeywords = string.Empty;
+        public string InfoKeywords { get => _infoKeywords; set => SetProperty(ref _infoKeywords, value); }
+
+        private string _infoPeople = string.Empty;
+        public string InfoPeople { get => _infoPeople; set => SetProperty(ref _infoPeople, value); }
+
+        public ObservableCollection<FaceRegionItem> FaceRegions { get; } = new();
+
         private int _imageWidth;
         public int ImageWidth
         {
@@ -604,6 +630,32 @@ namespace Photo.ViewModels
             InfoFileSize = FormatFileSize(imageInfo.FileSize);
             InfoCreatedDate = imageInfo.CreatedDate.LocalDateTime.ToString("yyyy年M月d日 HH:mm");
             InfoModifiedDate = imageInfo.ModifiedDate.LocalDateTime.ToString("yyyy年M月d日 HH:mm");
+
+            InfoCameraModel = imageInfo.CameraModel;
+            InfoFNumber = imageInfo.FNumber;
+            InfoExposureTime = imageInfo.ExposureTime;
+            InfoISO = imageInfo.ISO;
+            InfoFocalLength = imageInfo.FocalLength;
+            InfoDateTimeOriginal = imageInfo.DateTimeOriginal?.ToString("yyyy年M月d日 HH:mm:ss") ?? "";
+            InfoKeywords = string.Join(", ", imageInfo.Keywords);
+            InfoPeople = string.Join(", ", imageInfo.People);
+
+            FaceRegions.Clear();
+            
+            System.Diagnostics.Debug.WriteLine($"UpdateFileInfo: Found {imageInfo.FaceRegions.Count} face regions");
+            
+            foreach (var region in imageInfo.FaceRegions)
+            {
+                System.Diagnostics.Debug.WriteLine($"Adding face region: {region.Name} at ({region.X}, {region.Y}, {region.Width}, {region.Height})");
+                FaceRegions.Add(new FaceRegionItem
+                {
+                    Name = region.Name,
+                    X = region.X,
+                    Y = region.Y,
+                    Width = region.Width,
+                    Height = region.Height
+                });
+            }
         }
 
         private string FormatFileSize(long bytes)
@@ -846,5 +898,15 @@ namespace Photo.ViewModels
         public event Action? SettingsRequested;
 
         #endregion
+    }
+
+    public class FaceRegionItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+        public string Tooltip => Name;
     }
 }
