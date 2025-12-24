@@ -574,7 +574,7 @@ namespace Photo
                 // 创建可见的人脸框（默认不可见）
                 var faceBox = new Border
                 {
-                    BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Yellow),
+                    BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White),
                     Width = w,
                     Height = h,
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
@@ -590,7 +590,7 @@ namespace Photo
                     textBlock = new TextBlock
                     {
                         Text = region.Name,
-                        Foreground = new SolidColorBrush(Microsoft.UI.Colors.Yellow),
+                        Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
                         FontWeight = Microsoft.UI.Text.FontWeights.Bold
                     };
                     faceBox.Child = textBlock;
@@ -605,7 +605,7 @@ namespace Photo
                 Canvas.SetTop(faceBox, y);
 
                 // 创建透明的悬停检测区域（比人脸框稍大一些）
-                var padding = 0.0;  // 扩展检测区域
+                var padding = 20.0;  // 扩展检测区域
                 var hitArea = new Border
                 {
                     Width = w + padding * 2,
@@ -644,19 +644,54 @@ namespace Photo
             // 获取当前缩放比例
             var zoomFactor = ImageScrollViewer?.ZoomFactor ?? 1.0f;
 
-            // 固定的视觉大小（在zoomFactor=1时的值）
-            const double baseFontSize = 14.0;
-            const double baseBorderThickness = 2.0;
-            const double baseTextOffset = 25.0;
+            // 获取图片原始分辨率
+            var originalWidth = ViewModel.ImageWidth;
+            var originalHeight = ViewModel.ImageHeight;
+
+            // 根据图片分辨率动态确定基础值
+            double baseFontSize, baseBorderThickness, baseTextOffset, minBorderThickness;
+
+            if (originalWidth >= 3000 || originalHeight >= 3000)
+            {
+                // 高分辨率图片（4K及以上）
+                baseFontSize = 14.0;
+                baseBorderThickness = 2.0;
+                baseTextOffset = 25.0;
+                minBorderThickness = 1.0;
+            }
+            else if (originalWidth >= 2000 || originalHeight >= 2000)
+            {
+                // 高分辨率图片（2K-4K）
+                baseFontSize = 13.0;
+                baseBorderThickness = 1.8;
+                baseTextOffset = 24.0;
+                minBorderThickness = 0.9;
+            }
+            else if (originalWidth >= 1000 || originalHeight >= 1000)
+            {
+                // 中等分辨率图片（1K-2K）
+                baseFontSize = 12.0;
+                baseBorderThickness = 1.5;
+                baseTextOffset = 22.0;
+                minBorderThickness = 0.8;
+            }
+            else
+            {
+                // 低分辨率图片（<1K）
+                baseFontSize = 10.0;
+                baseBorderThickness = 1.2;
+                baseTextOffset = 20.0;
+                minBorderThickness = 0.6;
+            }
 
             // 根据缩放比例反向调整，使得视觉大小保持不变
             var fontSize = baseFontSize / zoomFactor;
             var borderThickness = baseBorderThickness / zoomFactor;
             var textOffset = baseTextOffset / zoomFactor;
 
-            // 设置最小值，防止过小不可见
+            // 设置最小值，防止过小不可见（根据分辨率动态调整）
             fontSize = Math.Max(fontSize, 8.0);
-            borderThickness = Math.Max(borderThickness, 1.0);
+            borderThickness = Math.Max(borderThickness, minBorderThickness);
             textOffset = Math.Max(textOffset, 15.0);
 
             foreach (var (faceBox, textBlock) in _faceBoxElements)
