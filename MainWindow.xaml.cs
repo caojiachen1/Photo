@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.UI;
@@ -40,6 +41,7 @@ namespace Photo
         private float _minZoomFactor = 0.1f;
         private bool _isUpdatingSlider;
         private ScrollViewer? _thumbnailScrollViewer;
+        private readonly List<(Border faceBox, TextBlock? textBlock)> _faceBoxElements = new();
 
         #endregion
 
@@ -262,6 +264,7 @@ namespace Photo
                 _isUpdatingSlider = false;
             }
             UpdateCursor();
+            UpdateFaceBoxStyles();
         }
 
         private void ZoomSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -546,6 +549,7 @@ namespace Photo
             if (FaceOverlayCanvas == null) return;
 
             FaceOverlayCanvas.Children.Clear();
+            _faceBoxElements.Clear();
 
             var imageWidth = MainImage.ActualWidth;
             var imageHeight = MainImage.ActualHeight;
@@ -571,7 +575,6 @@ namespace Photo
                 var faceBox = new Border
                 {
                     BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Yellow),
-                    BorderThickness = new Thickness(2),
                     Width = w,
                     Height = h,
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
@@ -579,19 +582,22 @@ namespace Photo
                     IsHitTestVisible = false  // 不参与命中测试
                 };
 
+                TextBlock? textBlock = null;
+
                 // 添加人名标签
                 if (!string.IsNullOrEmpty(region.Name))
                 {
-                    var textBlock = new TextBlock
+                    textBlock = new TextBlock
                     {
                         Text = region.Name,
                         Foreground = new SolidColorBrush(Microsoft.UI.Colors.Yellow),
-                        FontSize = 12,
-                        FontWeight = Microsoft.UI.Text.FontWeights.Bold,
-                        Margin = new Thickness(2, -18, 0, 0)
+                        FontWeight = Microsoft.UI.Text.FontWeights.Bold
                     };
                     faceBox.Child = textBlock;
                 }
+
+                // 保存元素引用以便后续更新样式
+                _faceBoxElements.Add((faceBox, textBlock));
 
                 ToolTipService.SetToolTip(faceBox, region.Name);
 
@@ -625,6 +631,43 @@ namespace Photo
                 // 先添加检测区域，再添加人脸框（确保人脸框在上层显示）
                 FaceOverlayCanvas.Children.Add(hitArea);
                 FaceOverlayCanvas.Children.Add(faceBox);
+            }
+
+            // 初始化样式
+            UpdateFaceBoxStyles();
+        }
+
+        private void UpdateFaceBoxStyles()
+        {
+            if (_faceBoxElements.Count == 0) return;
+
+            // 获取当前缩放比例
+            var zoomFactor = ImageScrollViewer?.ZoomFactor ?? 1.0f;
+
+            // 固定的视觉大小（在zoomFactor=1时的值）
+            const double baseFontSize = 14.0;
+            const double baseBorderThickness = 2.0;
+            const double baseTextOffset = 25.0;
+
+            // 根据缩放比例反向调整，使得视觉大小保持不变
+            var fontSize = baseFontSize / zoomFactor;
+            var borderThickness = baseBorderThickness / zoomFactor;
+            var textOffset = baseTextOffset / zoomFactor;
+
+            // 设置最小值，防止过小不可见
+            fontSize = Math.Max(fontSize, 8.0);
+            borderThickness = Math.Max(borderThickness, 1.0);
+            textOffset = Math.Max(textOffset, 15.0);
+
+            foreach (var (faceBox, textBlock) in _faceBoxElements)
+            {
+                faceBox.BorderThickness = new Thickness(borderThickness);
+
+                if (textBlock != null)
+                {
+                    textBlock.FontSize = fontSize;
+                    textBlock.Margin = new Thickness(2, -textOffset, 0, 0);
+                }
             }
         }
 
