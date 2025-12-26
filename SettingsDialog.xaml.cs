@@ -10,6 +10,12 @@ namespace Photo
             set => DeleteConfirmToggle.IsOn = value;
         }
 
+        public bool ShowFaces
+        {
+            get => ShowFacesToggle.IsOn;
+            set => ShowFacesToggle.IsOn = value;
+        }
+
         public SettingsDialog()
         {
             this.InitializeComponent();

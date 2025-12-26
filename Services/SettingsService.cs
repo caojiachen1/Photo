@@ -8,6 +8,7 @@ namespace Photo.Services
     public interface ISettingsService
     {
         bool ConfirmBeforeDelete { get; set; }
+        bool ShowFaces { get; set; }
     }
 
     /// <summary>
@@ -17,6 +18,7 @@ namespace Photo.Services
     {
         private readonly ApplicationDataContainer _localSettings;
         private const string ConfirmBeforeDeleteKey = "ConfirmBeforeDelete";
+        private const string ShowFacesKey = "ShowFaces";
 
         public SettingsService()
         {
@@ -33,6 +35,19 @@ namespace Photo.Services
             set
             {
                 _localSettings.Values[ConfirmBeforeDeleteKey] = value;
+            }
+        }
+
+        public bool ShowFaces
+        {
+            get
+            {
+                var value = _localSettings.Values[ShowFacesKey];
+                return value is bool b ? b : true;
+            }
+            set
+            {
+                _localSettings.Values[ShowFacesKey] = value;
             }
         }
     }

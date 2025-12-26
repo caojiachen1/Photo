@@ -56,6 +56,49 @@
                               OnContent=""
                               OffContent=""/>
             </Grid>
+
+            <!-- 显示人脸 -->
+            <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                  CornerRadius="4" 
+                  Padding="16,12"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                  BorderThickness="1"
+                  Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 图标 -->
+                <FontIcon Grid.Column="0" 
+                          Glyph="&#xE77B;" 
+                          FontSize="20" 
+                          Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,16,0"/>
+
+                <!-- 文本 -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="显示人脸" 
+                               FontSize="14" 
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="在照片上显示元数据的人脸框" 
+                               FontSize="12" 
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- 开关 -->
+                <ToggleSwitch x:Name="ShowFacesToggle" 
+                              Grid.Column="2" 
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Right"
+                              Margin="16,0,-100,0"
+                              OnContent=""
+                              OffContent=""/>
+            </Grid>
         </StackPanel>
     </ScrollViewer>
 </ContentDialog>

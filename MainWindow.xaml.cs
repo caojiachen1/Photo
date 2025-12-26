@@ -524,13 +524,20 @@ namespace Photo
             var dialog = new SettingsDialog
             {
                 XamlRoot = Content.XamlRoot,
-                ConfirmBeforeDelete = AppSettings.ConfirmBeforeDelete
+                ConfirmBeforeDelete = AppSettings.ConfirmBeforeDelete,
+                ShowFaces = AppSettings.ShowFaces
             };
 
             var result = await dialog.ShowAsync();
             if (result == ContentDialogResult.Primary)
             {
                 AppSettings.ConfirmBeforeDelete = dialog.ConfirmBeforeDelete;
+                
+                if (AppSettings.ShowFaces != dialog.ShowFaces)
+                {
+                    AppSettings.ShowFaces = dialog.ShowFaces;
+                    UpdateFaceOverlay();
+                }
             }
         }
 
@@ -550,6 +557,8 @@ namespace Photo
 
             FaceOverlayCanvas.Children.Clear();
             _faceBoxElements.Clear();
+
+            if (!AppSettings.ShowFaces) return;
 
             var imageWidth = MainImage.ActualWidth;
             var imageHeight = MainImage.ActualHeight;
