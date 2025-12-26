@@ -724,6 +724,11 @@ namespace Photo
             }
         }
 
+        private void OnToolbarElementDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            e.Handled = true;
+        }
+
         #endregion
     }
 }

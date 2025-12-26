@@ -50,6 +50,55 @@
                     </Grid>
                 </Grid>
             </ControlTemplate>
+
+            <Style x:Key="ToolbarButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="4"/>
+                <Setter Property="Padding" Value="10"/>
+                <Setter Property="MinWidth" Value="40"/>
+                <Setter Property="MinHeight" Value="40"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="RootGrid" 
+                                  Background="Transparent" 
+                                  CornerRadius="{TemplateBinding CornerRadius}"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="RootScale"/>
+                                </Grid.RenderTransform>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
+                                                <Setter Target="RootScale.ScaleX" Value="0.92" />
+                                                <Setter Target="RootScale.ScaleY" Value="0.92" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter x:Name="ContentPresenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  Padding="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  AutomationProperties.AccessibilityView="Raw"/>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </Grid.Resources>
 
         <Grid.RowDefinitions>
@@ -68,38 +117,32 @@
             </Grid.ColumnDefinitions>
 
             <!-- 左侧按钮组 -->
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center" DoubleTapped="OnToolbarElementDoubleTapped">
+                <!-- 另存为按钮 -->
+                <Button x:Name="TopSaveAsButton" ToolTipService.ToolTip="另存为" Command="{x:Bind ViewModel.SaveAsCommand}" Style="{StaticResource ToolbarButtonStyle}">
+                    <FontIcon Glyph="&#xE792;" FontSize="16"/>
+                </Button>
+
+                <!-- 复制按钮 -->
+                <Button x:Name="TopCopyButton" ToolTipService.ToolTip="复制" Command="{x:Bind ViewModel.CopyCommand}" Style="{StaticResource ToolbarButtonStyle}">
+                    <FontIcon Glyph="&#xE8C8;" FontSize="16"/>
+                </Button>
+
                 <!-- 旋转按钮 -->
-                <Button x:Name="TopRotateButton" ToolTipService.ToolTip="旋转" Command="{x:Bind ViewModel.RotateCommand}">
+                <Button x:Name="TopRotateButton" ToolTipService.ToolTip="旋转" Command="{x:Bind ViewModel.RotateCommand}" Style="{StaticResource ToolbarButtonStyle}">
                     <FontIcon Glyph="&#xE7AD;" FontSize="16"/>
                 </Button>
 
                 <!-- 删除按钮 -->
-                <Button x:Name="DeleteButton" ToolTipService.ToolTip="删除" Command="{x:Bind ViewModel.DeleteCommand}" Margin="4,0,0,0">
+                <Button x:Name="DeleteButton" ToolTipService.ToolTip="删除" Command="{x:Bind ViewModel.DeleteCommand}" Margin="4,0,0,0" Style="{StaticResource ToolbarButtonStyle}">
                     <FontIcon Glyph="&#xE74D;" FontSize="16"/>
                 </Button>
 
                 <!-- 更多操作菜单 -->
-                <Button x:Name="MoreActionsButton" ToolTipService.ToolTip="更多操作" Margin="4,0,0,0">
+                <Button x:Name="MoreActionsButton" ToolTipService.ToolTip="更多操作" Margin="4,0,0,0" Style="{StaticResource ToolbarButtonStyle}">
                     <FontIcon Glyph="&#xE712;" FontSize="16"/>
                     <Button.Flyout>
                         <MenuFlyout Placement="Bottom">
-                            <MenuFlyoutItem x:Name="SaveAsMenuItem" Text="另存为" Command="{x:Bind ViewModel.SaveAsCommand}">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE792;"/>
-                                </MenuFlyoutItem.Icon>
-                                <MenuFlyoutItem.KeyboardAccelerators>
-                                    <KeyboardAccelerator Modifiers="Control,Shift" Key="S"/>
-                                </MenuFlyoutItem.KeyboardAccelerators>
-                            </MenuFlyoutItem>
-                            <MenuFlyoutItem x:Name="CopyMenuItem" Text="复制" Command="{x:Bind ViewModel.CopyCommand}">
-                                <MenuFlyoutItem.Icon>
-                                    <FontIcon Glyph="&#xE8C8;"/>
-                                </MenuFlyoutItem.Icon>
-                                <MenuFlyoutItem.KeyboardAccelerators>
-                                    <KeyboardAccelerator Modifiers="Control" Key="C"/>
-                                </MenuFlyoutItem.KeyboardAccelerators>
-                            </MenuFlyoutItem>
                             <MenuFlyoutItem x:Name="OpenInExplorerMenuItem" Text="在文件资源管理器中打开" Command="{x:Bind ViewModel.OpenInExplorerCommand}">
                                 <MenuFlyoutItem.Icon>
                                     <FontIcon Glyph="&#xEC50;"/>
@@ -125,11 +168,20 @@
 
             <!-- 右侧占位，保持文件名居中 -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="0,0,8,0" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False">
-                <Button>
+                <Button Style="{StaticResource ToolbarButtonStyle}">
+                    <FontIcon Glyph="&#xE792;" FontSize="16"/>
+                </Button>
+                <Button Style="{StaticResource ToolbarButtonStyle}">
+                    <FontIcon Glyph="&#xE8C8;" FontSize="16"/>
+                </Button>
+                <Button Style="{StaticResource ToolbarButtonStyle}">
                     <FontIcon Glyph="&#xE7AD;" FontSize="16"/>
                 </Button>
-                <Button Margin="4,0,0,0">
+                <Button Margin="4,0,0,0" Style="{StaticResource ToolbarButtonStyle}">
                     <FontIcon Glyph="&#xE74D;" FontSize="16"/>
+                </Button>
+                <Button Margin="4,0,0,0" Style="{StaticResource ToolbarButtonStyle}">
+                    <FontIcon Glyph="&#xE712;" FontSize="16"/>
                 </Button>
             </StackPanel>
         </Grid>
