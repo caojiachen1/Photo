@@ -41,7 +41,7 @@ namespace Photo
         private float _minZoomFactor = 0.1f;
         private bool _isUpdatingSlider;
         private ScrollViewer? _thumbnailScrollViewer;
-        private readonly List<(Border faceBox, TextBlock? textBlock)> _faceBoxElements = new();
+        private readonly List<(Border faceBox, FrameworkElement? textContainer, TextBlock? textBlock)> _faceBoxElements = new();
 
         #endregion
 
@@ -582,6 +582,7 @@ namespace Photo
                     IsHitTestVisible = false  // 不参与命中测试
                 };
 
+                FrameworkElement? textContainer = null;
                 TextBlock? textBlock = null;
 
                 // 添加人名标签
@@ -591,13 +592,27 @@ namespace Photo
                     {
                         Text = region.Name,
                         Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
-                        FontWeight = Microsoft.UI.Text.FontWeights.Bold
+                        FontWeight = Microsoft.UI.Text.FontWeights.Normal,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
                     };
-                    faceBox.Child = textBlock;
+
+                    textContainer = new Border
+                    {
+                        Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 64, 64, 64)),
+                        BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.White),
+                        CornerRadius = new CornerRadius(5),
+                        Padding = new Thickness(2, 0, 2, 0),
+                        Child = textBlock,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        VerticalAlignment = VerticalAlignment.Bottom
+                    };
+
+                    faceBox.Child = textContainer;
                 }
 
                 // 保存元素引用以便后续更新样式
-                _faceBoxElements.Add((faceBox, textBlock));
+                _faceBoxElements.Add((faceBox, textContainer, textBlock));
 
                 ToolTipService.SetToolTip(faceBox, region.Name);
 
@@ -654,34 +669,34 @@ namespace Photo
             if (originalWidth >= 3000 || originalHeight >= 3000)
             {
                 // 高分辨率图片（4K及以上）
-                baseFontSize = 14.0;
-                baseBorderThickness = 2.0;
+                baseFontSize = 12.0;
+                baseBorderThickness = 1.5;
                 baseTextOffset = 25.0;
-                minBorderThickness = 1.0;
+                minBorderThickness = 0.8;
             }
             else if (originalWidth >= 2000 || originalHeight >= 2000)
             {
                 // 高分辨率图片（2K-4K）
-                baseFontSize = 13.0;
-                baseBorderThickness = 1.8;
+                baseFontSize = 11.0;
+                baseBorderThickness = 1.2;
                 baseTextOffset = 24.0;
-                minBorderThickness = 0.9;
+                minBorderThickness = 0.7;
             }
             else if (originalWidth >= 1000 || originalHeight >= 1000)
             {
                 // 中等分辨率图片（1K-2K）
-                baseFontSize = 12.0;
-                baseBorderThickness = 1.5;
+                baseFontSize = 10.0;
+                baseBorderThickness = 1.0;
                 baseTextOffset = 22.0;
-                minBorderThickness = 0.8;
+                minBorderThickness = 0.6;
             }
             else
             {
                 // 低分辨率图片（<1K）
-                baseFontSize = 10.0;
-                baseBorderThickness = 1.2;
+                baseFontSize = 9.0;
+                baseBorderThickness = 0.8;
                 baseTextOffset = 20.0;
-                minBorderThickness = 0.6;
+                minBorderThickness = 0.5;
             }
 
             // 根据缩放比例反向调整，使得视觉大小保持不变
@@ -690,18 +705,21 @@ namespace Photo
             var textOffset = baseTextOffset / zoomFactor;
 
             // 设置最小值，防止过小不可见（根据分辨率动态调整）
-            fontSize = Math.Max(fontSize, 8.0);
+            fontSize = Math.Max(fontSize, 7.0);
             borderThickness = Math.Max(borderThickness, minBorderThickness);
             textOffset = Math.Max(textOffset, 15.0);
 
-            foreach (var (faceBox, textBlock) in _faceBoxElements)
+            foreach (var (faceBox, textContainer, textBlock) in _faceBoxElements)
             {
                 faceBox.BorderThickness = new Thickness(borderThickness);
 
-                if (textBlock != null)
+                if (textBlock != null && textContainer is Border border)
                 {
                     textBlock.FontSize = fontSize;
-                    textBlock.Margin = new Thickness(2, -textOffset, 0, 0);
+                    border.Margin = new Thickness(0, 0, 0, -textOffset - (fontSize / 2));
+                    border.BorderThickness = new Thickness(Math.Max(borderThickness * 0.6, 0.5));
+                    border.CornerRadius = new CornerRadius(fontSize * 0.5);
+                    border.Padding = new Thickness(fontSize * 0.2, 0, fontSize * 0.2, 0);
                 }
             }
         }
