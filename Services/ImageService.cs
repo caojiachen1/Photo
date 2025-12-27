@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
+using Windows.Storage.Search;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Xmp;
 using MetadataExtractor.Formats.Exif;
@@ -406,14 +408,103 @@ namespace Photo.Services
             try
             {
                 var folder = await currentFile.GetParentAsync();
-                if (folder != null)
+                if (folder == null) return new List<StorageFile> { currentFile };
+
+                // 1. 快速获取文件列表（保持之前的性能优化）
+                var queryOptions = new QueryOptions(CommonFileQuery.DefaultQuery, _imageExtensions);
+                queryOptions.IndexerOption = IndexerOption.DoNotUseIndexer;
+                var queryResult = folder.CreateFileQueryWithOptions(queryOptions);
+                var files = await queryResult.GetFilesAsync();
+                var fileList = files.ToList();
+
+                if (fileList.Count <= 1) return fileList;
+
+                // 2. 尝试获取 Shell 排序顺序（匹配资源管理器的当前视图）
+                try
                 {
-                    var files = await folder.GetFilesAsync();
-                    return files.Where(f => IsImageFile(f.FileType))
-                                .OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase)
-                                .ToList();
+                    string folderPath = folder.Path;
+                    var shellOrder = await Task.Run(() =>
+                    {
+                        var pathOrder = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                        Type? shellType = Type.GetTypeFromProgID("Shell.Application");
+                        if (shellType != null)
+                        {
+                            object? shellObj = Activator.CreateInstance(shellType);
+                            if (shellObj != null)
+                            {
+                                dynamic shell = shellObj;
+                                // 优先尝试从当前打开的资源管理器窗口获取顺序
+                                dynamic windows = shell.Windows();
+                                bool foundWindow = false;
+                                for (int i = 0; i < windows.Count; i++)
+                                {
+                                    try
+                                    {
+                                        dynamic window = windows.Item(i);
+                                        if (window != null)
+                                        {
+                                            string? locationUrl = window.LocationURL;
+                                            if (!string.IsNullOrEmpty(locationUrl))
+                                            {
+                                                string windowPath = new Uri(locationUrl).LocalPath;
+                                                if (string.Equals(windowPath, folderPath, StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    // 获取该窗口视图中的项顺序
+                                                    dynamic document = window.Document;
+                                                    if (document != null)
+                                                    {
+                                                        dynamic folderObj = document.Folder;
+                                                        if (folderObj != null)
+                                                        {
+                                                            dynamic items = folderObj.Items();
+                                                            int index = 0;
+                                                            foreach (dynamic item in items)
+                                                            {
+                                                                pathOrder[item.Path] = index++;
+                                                            }
+                                                            foundWindow = true;
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch { /* 忽略无法访问的窗口 */ }
+                                }
+
+                                // 如果没找到打开的窗口，则获取该文件夹的默认 Shell 顺序
+                                if (!foundWindow)
+                                {
+                                    dynamic shellFolder = shell.NameSpace(folderPath);
+                                    if (shellFolder != null)
+                                    {
+                                        dynamic items = shellFolder.Items();
+                                        int index = 0;
+                                        foreach (dynamic item in items)
+                                        {
+                                            pathOrder[item.Path] = index++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        return pathOrder;
+                    });
+
+                    if (shellOrder.Count > 0)
+                    {
+                        // 根据 Shell 顺序对文件列表进行排序
+                        return fileList.OrderBy(f => shellOrder.TryGetValue(f.Path, out int index) ? index : int.MaxValue).ToList();
+                    }
                 }
-                return new List<StorageFile> { currentFile };
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("Shell sorting failed: " + ex.Message);
+                }
+
+                // 3. 回退：如果无法获取 Shell 顺序，则使用默认顺序（通常是按名称）
+                return fileList;
             }
             catch
             {

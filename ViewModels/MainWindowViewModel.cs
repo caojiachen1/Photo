@@ -25,6 +25,7 @@ namespace Photo.ViewModels
         private readonly IExplorerService _explorerService;
         private readonly DispatcherQueue _dispatcherQueue;
         private DispatcherTimer? _folderUpdateTimer;
+        private System.Threading.CancellationTokenSource? _thumbnailCts;
 
         #endregion
 
@@ -584,7 +585,8 @@ namespace Photo.ViewModels
             if (_currentFile == null) return;
 
             _folderFiles = await _imageService.GetFolderImagesAsync(_currentFile);
-            await UpdateThumbnailsAsync();
+            // 异步更新缩略图列表，不阻塞主流程（如导航按钮的更新）
+            _ = UpdateThumbnailsAsync();
         }
 
         private void UpdateNavigationButtons()
@@ -825,37 +827,79 @@ namespace Photo.ViewModels
 
         private async Task UpdateThumbnailsAsync()
         {
+            _thumbnailCts?.Cancel();
+            _thumbnailCts?.Dispose();
+            _thumbnailCts = new System.Threading.CancellationTokenSource();
+            var token = _thumbnailCts.Token;
+
             ThumbnailItems.Clear();
 
             if (_folderFiles.Count == 0) return;
 
-            foreach (var file in _folderFiles)
+            // 如果文件非常多，分批添加到集合中，防止 UI 长时间卡顿
+            const int batchSize = 100;
+            for (int i = 0; i < _folderFiles.Count; i += batchSize)
             {
-                var item = new ThumbnailItem(file)
+                if (token.IsCancellationRequested) return;
+
+                var batch = _folderFiles.Skip(i).Take(batchSize);
+                foreach (var file in batch)
                 {
-                    IsSelected = file.Path == _currentFile?.Path
-                };
-                ThumbnailItems.Add(item);
+                    var item = new ThumbnailItem(file)
+                    {
+                        IsSelected = file.Path == _currentFile?.Path
+                    };
+                    ThumbnailItems.Add(item);
+                }
+
+                // 给 UI 线程喘息的机会
+                if (_folderFiles.Count > batchSize)
+                {
+                    await Task.Yield();
+                }
             }
 
-            await LoadThumbnailsAsync();
+            // 不要在主流程中等待所有缩略图加载完成
+            _ = LoadThumbnailsAsync(token);
         }
 
-        private async Task LoadThumbnailsAsync()
+        private async Task LoadThumbnailsAsync(System.Threading.CancellationToken token)
         {
+            if (ThumbnailItems.Count == 0) return;
+
+            // 优先加载当前图片附近的缩略图
+            int currentIndex = _folderFiles.FindIndex(f => f.Path == _currentFile?.Path);
+            if (currentIndex == -1) currentIndex = 0;
+
+            var itemsToLoad = ThumbnailItems.ToList();
+            // 按距离当前索引的距离排序，优先加载近的
+            var sortedItems = itemsToLoad.OrderBy(item => 
+            {
+                int index = itemsToLoad.IndexOf(item);
+                return Math.Abs(index - currentIndex);
+            }).ToList();
+
             var semaphore = new System.Threading.SemaphoreSlim(4);
-            var tasks = ThumbnailItems.ToList().Select(item => LoadSingleThumbnailAsync(item, semaphore));
+            var tasks = sortedItems.Select(item => LoadSingleThumbnailAsync(item, semaphore, token));
             await Task.WhenAll(tasks);
         }
 
-        private async Task LoadSingleThumbnailAsync(ThumbnailItem item, System.Threading.SemaphoreSlim semaphore)
+        private async Task LoadSingleThumbnailAsync(ThumbnailItem item, System.Threading.SemaphoreSlim semaphore, System.Threading.CancellationToken token)
         {
-            await semaphore.WaitAsync();
+            if (token.IsCancellationRequested) return;
+
+            await semaphore.WaitAsync(token);
             try
             {
+                if (token.IsCancellationRequested) return;
+
                 var thumbnail = await _imageService.GetThumbnailAsync(item.File);
+                
+                if (token.IsCancellationRequested) return;
+
                 _dispatcherQueue.TryEnqueue(() =>
                 {
+                    if (token.IsCancellationRequested) return;
                     if (thumbnail != null)
                     {
                         item.Thumbnail = thumbnail;
