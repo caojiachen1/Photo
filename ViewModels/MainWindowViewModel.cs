@@ -8,6 +8,7 @@ using System.Windows.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Media.Core;
 using Photo.Services;
 using Windows.Storage;
 
@@ -106,6 +107,30 @@ namespace Photo.ViewModels
                     RaiseCommandsCanExecuteChanged();
                 }
             }
+        }
+
+        private bool _isVideo;
+        public bool IsVideo
+        {
+            get => _isVideo;
+            set
+            {
+                if (SetProperty(ref _isVideo, value))
+                {
+                    OnPropertyChanged(nameof(ImageVisibility));
+                    OnPropertyChanged(nameof(VideoVisibility));
+                }
+            }
+        }
+
+        public Visibility ImageVisibility => IsVideo ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility VideoVisibility => IsVideo ? Visibility.Visible : Visibility.Collapsed;
+
+        private StorageFile? _videoFile;
+        public StorageFile? VideoFile
+        {
+            get => _videoFile;
+            set => SetProperty(ref _videoFile, value);
         }
 
         public Visibility PlaceholderVisibility => IsImageLoaded ? Visibility.Collapsed : Visibility.Visible;
@@ -448,7 +473,7 @@ namespace Photo.ViewModels
                 var imageInfo = await _imageService.LoadImageAsync(file);
                 if (imageInfo == null)
                 {
-                    await _dialogService.ShowErrorAsync("无法加载图片", "无法读取图片文件");
+                    await _dialogService.ShowErrorAsync("无法加载文件", "无法读取文件");
                     return;
                 }
 
@@ -460,7 +485,19 @@ namespace Photo.ViewModels
                 }
 
                 // 更新属性
-                ImageSource = imageInfo.Bitmap;
+                if (_imageService.IsVideoFile(file.FileType))
+                {
+                    IsVideo = true;
+                    VideoFile = file;
+                    ImageSource = null;
+                }
+                else
+                {
+                    IsVideo = false;
+                    VideoFile = null;
+                    ImageSource = imageInfo.Bitmap;
+                }
+
                 ImageWidth = imageInfo.Width;
                 ImageHeight = imageInfo.Height;
                 FileName = imageInfo.FileName;
@@ -488,13 +525,13 @@ namespace Photo.ViewModels
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowErrorAsync("无法加载图片", ex.Message);
+                await _dialogService.ShowErrorAsync("无法加载文件", ex.Message);
             }
         }
 
         public async Task HandleDropAsync(StorageFile file)
         {
-            if (_imageService.IsImageFile(file.FileType))
+            if (_imageService.IsImageFile(file.FileType) || _imageService.IsVideoFile(file.FileType))
             {
                 // 通过路径重新获取文件，以获得完整的读写权限
                 // 拖拽进来的 StorageFile 是只读的，无法进行旋转等修改操作
@@ -627,8 +664,25 @@ namespace Photo.ViewModels
         {
             InfoFileName = imageInfo.FileName;
             InfoFilePath = Path.GetDirectoryName(imageInfo.FilePath) ?? "";
-            InfoFileType = imageInfo.FileType.ToUpperInvariant().TrimStart('.') + " 图片";
-            InfoDimensions = $"{imageInfo.Width} x {imageInfo.Height} 像素";
+            
+            if (_imageService.IsVideoFile(imageInfo.FileType))
+            {
+                InfoFileType = imageInfo.FileType.ToUpperInvariant().TrimStart('.') + " 视频";
+                if (imageInfo.Duration != TimeSpan.Zero)
+                {
+                    InfoDimensions = $"{imageInfo.Width} x {imageInfo.Height} ({imageInfo.Duration:hh\\:mm\\:ss})";
+                }
+                else
+                {
+                    InfoDimensions = $"{imageInfo.Width} x {imageInfo.Height}";
+                }
+            }
+            else
+            {
+                InfoFileType = imageInfo.FileType.ToUpperInvariant().TrimStart('.') + " 图片";
+                InfoDimensions = $"{imageInfo.Width} x {imageInfo.Height} 像素";
+            }
+
             InfoFileSize = FormatFileSize(imageInfo.FileSize);
             InfoCreatedDate = imageInfo.CreatedDate.LocalDateTime.ToString("yyyy年M月d日 HH:mm");
             InfoModifiedDate = imageInfo.ModifiedDate.LocalDateTime.ToString("yyyy年M月d日 HH:mm");

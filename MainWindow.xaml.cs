@@ -101,6 +101,7 @@ namespace Photo
             ViewModel.SettingsRequested += OnSettingsRequested;
             ViewModel.ZoomSliderValueChanged += OnZoomSliderValueChanged;
             ViewModel.FaceRegions.CollectionChanged += FaceRegions_CollectionChanged;
+            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             // 初始化窗口
             SetDarkTitleBar();
@@ -736,6 +737,21 @@ namespace Photo
         private void OnToolbarElementDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
             e.Handled = true;
+        }
+
+        private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ViewModel.VideoFile))
+            {
+                if (ViewModel.VideoFile != null)
+                {
+                    VideoPlayer.LoadVideo(ViewModel.VideoFile);
+                }
+                else
+                {
+                    VideoPlayer.Stop();
+                }
+            }
         }
 
         #endregion

@@ -232,6 +232,7 @@
                           ViewChanged="ImageScrollViewer_ViewChanged"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
+                          Visibility="{x:Bind ViewModel.ImageVisibility, Mode=OneWay}"
                           IsHitTestVisible="True">
                 <Grid x:Name="ImageContainer" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Image x:Name="MainImage" 
@@ -253,6 +254,12 @@
                             IsHitTestVisible="True"/>
                 </Grid>
             </ScrollViewer>
+
+            <!-- FFmpeg 视频播放器 -->
+            <controls:FFmpegVideoPlayerControl x:Name="VideoPlayer"
+                                               Visibility="{x:Bind ViewModel.VideoVisibility, Mode=OneWay}"
+                                               HorizontalAlignment="Stretch"
+                                               VerticalAlignment="Stretch"/>
 
             <!-- 无图片时的占位符 -->
             <StackPanel x:Name="PlaceholderPanel" 

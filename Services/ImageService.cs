@@ -30,6 +30,7 @@ namespace Photo.Services
         Task<List<StorageFile>> GetFolderImagesAsync(StorageFile currentFile);
         Task<BitmapImage?> GetThumbnailAsync(StorageFile file, uint size = 200);
         bool IsImageFile(string extension);
+        bool IsVideoFile(string extension);
     }
 
     /// <summary>
@@ -69,6 +70,7 @@ namespace Photo.Services
         public string ISO { get; set; } = string.Empty;
         public string FocalLength { get; set; } = string.Empty;
         public DateTime? DateTimeOriginal { get; set; }
+        public TimeSpan Duration { get; set; }
     }
 
     /// <summary>
@@ -77,6 +79,7 @@ namespace Photo.Services
     public class ImageService : IImageService
     {
         private readonly string[] _imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".ico", ".tiff", ".tif" };
+        private readonly string[] _videoExtensions = { ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".3gp", ".mts" };
         private readonly DispatcherQueue _dispatcherQueue;
 
         public ImageService(DispatcherQueue dispatcherQueue)
@@ -87,6 +90,11 @@ namespace Photo.Services
         public bool IsImageFile(string extension)
         {
             return _imageExtensions.Contains(extension.ToLowerInvariant());
+        }
+
+        public bool IsVideoFile(string extension)
+        {
+            return _videoExtensions.Contains(extension.ToLowerInvariant());
         }
 
         public async Task<ImageInfo?> LoadImageAsync(StorageFile file)
@@ -100,15 +108,29 @@ namespace Photo.Services
                     FileType = file.FileType
                 };
 
-                // 加载图片
-                using (var stream = await file.OpenAsync(FileAccessMode.Read))
+                if (IsImageFile(file.FileType))
                 {
-                    var bitmapImage = new BitmapImage();
-                    await bitmapImage.SetSourceAsync(stream);
+                    // 加载图片
+                    using (var stream = await file.OpenAsync(FileAccessMode.Read))
+                    {
+                        var bitmapImage = new BitmapImage();
+                        await bitmapImage.SetSourceAsync(stream);
 
-                    imageInfo.Bitmap = bitmapImage;
-                    imageInfo.Width = bitmapImage.PixelWidth;
-                    imageInfo.Height = bitmapImage.PixelHeight;
+                        imageInfo.Bitmap = bitmapImage;
+                        imageInfo.Width = bitmapImage.PixelWidth;
+                        imageInfo.Height = bitmapImage.PixelHeight;
+                    }
+
+                    // 提取元数据
+                    await ExtractMetadataAsync(file, imageInfo);
+                }
+                else if (IsVideoFile(file.FileType))
+                {
+                    // 获取视频属性
+                    var videoProperties = await file.Properties.GetVideoPropertiesAsync();
+                    imageInfo.Width = (int)videoProperties.Width;
+                    imageInfo.Height = (int)videoProperties.Height;
+                    imageInfo.Duration = videoProperties.Duration;
                 }
 
                 // 获取文件属性
@@ -116,9 +138,6 @@ namespace Photo.Services
                 imageInfo.FileSize = (long)properties.Size;
                 imageInfo.ModifiedDate = properties.DateModified;
                 imageInfo.CreatedDate = properties.ItemDate;
-
-                // 提取元数据
-                await ExtractMetadataAsync(file, imageInfo);
 
                 return imageInfo;
             }
@@ -411,7 +430,8 @@ namespace Photo.Services
                 if (folder == null) return new List<StorageFile> { currentFile };
 
                 // 1. 快速获取文件列表（保持之前的性能优化）
-                var queryOptions = new QueryOptions(CommonFileQuery.DefaultQuery, _imageExtensions);
+                var allExtensions = _imageExtensions.Concat(_videoExtensions).ToArray();
+                var queryOptions = new QueryOptions(CommonFileQuery.DefaultQuery, allExtensions);
                 queryOptions.IndexerOption = IndexerOption.DoNotUseIndexer;
                 var queryResult = folder.CreateFileQueryWithOptions(queryOptions);
                 var files = await queryResult.GetFilesAsync();
