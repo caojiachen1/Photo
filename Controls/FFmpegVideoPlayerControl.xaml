@@ -96,7 +96,7 @@
                     BorderThickness="0"
                     Padding="0"
                     ToolTipService.ToolTip="Mute/Unmute">
-                <FontIcon x:Name="VolumeIcon" Glyph="&#xE74F;" FontSize="14" Foreground="White"/>
+                <FontIcon x:Name="VolumeIcon" Glyph="&#xE767;" FontSize="14" Foreground="White"/>
             </Button>
 
             <!-- Current Time -->
