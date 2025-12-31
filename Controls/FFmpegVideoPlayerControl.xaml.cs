@@ -2,6 +2,7 @@ using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Photo.Services;
 using Windows.Storage;
@@ -12,7 +13,6 @@ namespace Photo.Controls
     {
         private FFmpegVideoPlayer? _player;
         private bool _isSeeking;
-        private double _seekPosition;
         private DispatcherTimer? _hideControlsTimer;
         private DispatcherTimer? _positionUpdateTimer;
         private bool _isLooping = false;
@@ -48,6 +48,10 @@ namespace Photo.Controls
             ProgressSlider.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(ProgressSlider_PointerPressed), true);
             ProgressSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(ProgressSlider_PointerReleased), true);
             ProgressSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(ProgressSlider_PointerCaptureLost), true);
+            
+            // 暂停位置更新定时器当拖动时
+            ProgressSlider.GotFocus += (s, e) => _isSeeking = true;
+            ProgressSlider.LostFocus += (s, e) => { _isSeeking = false; _player?.Seek(ProgressSlider.Value); };
         }
 
         private void FFmpegVideoPlayerControl_Unloaded(object sender, RoutedEventArgs e)
@@ -194,34 +198,33 @@ namespace Photo.Controls
         private void ProgressSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
             _isSeeking = true;
-            _seekPosition = ProgressSlider.Value;
-            RestartHideTimer();
+            _positionUpdateTimer?.Stop();
         }
 
         private void ProgressSlider_PointerReleased(object sender, PointerRoutedEventArgs e)
         {
-            if (_isSeeking)
+            if (_isSeeking && _player != null)
             {
-                _isSeeking = false;
-                _player?.Seek(_seekPosition);
+                _player.Seek(ProgressSlider.Value);
             }
-            RestartHideTimer();
+            _isSeeking = false;
+            _positionUpdateTimer?.Start();
         }
 
         private void ProgressSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
         {
-            if (_isSeeking)
+            if (_isSeeking && _player != null)
             {
-                _isSeeking = false;
-                _player?.Seek(_seekPosition);
+                _player.Seek(ProgressSlider.Value);
             }
+            _isSeeking = false;
+            _positionUpdateTimer?.Start();
         }
 
         private void ProgressSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
         {
-            if (_isSeeking && _player != null)
+            if (_isSeeking)
             {
-                _seekPosition = e.NewValue;
                 CurrentTimeText.Text = FormatTime(e.NewValue);
             }
         }
@@ -286,12 +289,20 @@ namespace Photo.Controls
         private void ShowControls()
         {
             TransportControlsPanel.Visibility = Visibility.Visible;
+            FadeInStoryboard.Begin();
         }
 
         private void HideControls()
         {
-            TransportControlsPanel.Visibility = Visibility.Collapsed;
+            FadeOutStoryboard.Completed -= FadeOutStoryboard_Completed;
+            FadeOutStoryboard.Completed += FadeOutStoryboard_Completed;
+            FadeOutStoryboard.Begin();
             _hideControlsTimer?.Stop();
+        }
+
+        private void FadeOutStoryboard_Completed(object? sender, object e)
+        {
+            TransportControlsPanel.Visibility = Visibility.Collapsed;
         }
 
         private void RestartHideTimer()
