@@ -13,10 +13,12 @@ namespace Photo.Controls
     {
         private FFmpegVideoPlayer? _player;
         private bool _isSeeking;
+        private double _seekTargetPosition = -1; // seek 目标位置，避免进度条闪回
         private DispatcherTimer? _hideControlsTimer;
         private DispatcherTimer? _positionUpdateTimer;
         private bool _isLooping = false;
         private bool _isMuted = false;
+        private bool _isShortVideo = false; // 短视频标记，用于精确拖拽
 
         public FFmpegVideoPlayerControl()
         {
@@ -27,6 +29,101 @@ namespace Photo.Controls
             
             // 点击视频区域切换控件显示
             VideoImage.Tapped += VideoImage_Tapped;
+            
+            // 设置可获取焦点
+            this.IsTabStop = true;
+            this.AllowFocusOnInteraction = true;
+            
+            // 获取焦点以接收键盘事件
+            this.GotFocus += OnControlGotFocus;
+            this.PointerPressed += OnControlPointerPressed;
+        }
+        
+        private void OnControlGotFocus(object sender, RoutedEventArgs e)
+        {
+            // 确保控件能接收键盘事件
+        }
+        
+        private void OnControlPointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            // 点击时获取焦点以接收键盘事件
+            Focus(FocusState.Pointer);
+        }
+
+        private void UserControl_KeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key == Windows.System.VirtualKey.Space)
+            {
+                e.Handled = true;
+                TogglePlayPause();
+                ShowControls();
+                RestartHideTimer();
+            }
+            else if (e.Key == Windows.System.VirtualKey.Left)
+            {
+                e.Handled = true;
+                if (_player != null)
+                {
+                    // 短视频使用更小的步进
+                    var step = _isShortVideo ? 1.0 : 5.0;
+                    var newPosition = Math.Max(0, _player.Position - step);
+                    _player.Seek(newPosition);
+                    ShowControls();
+                    RestartHideTimer();
+                }
+            }
+            else if (e.Key == Windows.System.VirtualKey.Right)
+            {
+                e.Handled = true;
+                if (_player != null)
+                {
+                    // 短视频使用更小的步进
+                    var step = _isShortVideo ? 1.0 : 5.0;
+                    var newPosition = Math.Min(_player.Duration, _player.Position + step);
+                    _player.Seek(newPosition);
+                    ShowControls();
+                    RestartHideTimer();
+                }
+            }
+            else if (e.Key == Windows.System.VirtualKey.M)
+            {
+                // M 键静音切换
+                e.Handled = true;
+                if (_player != null)
+                {
+                    _isMuted = !_isMuted;
+                    _player.IsMuted = _isMuted;
+                    UpdateVolumeIcon();
+                    ShowControls();
+                    RestartHideTimer();
+                }
+            }
+            else if (e.Key == Windows.System.VirtualKey.L)
+            {
+                // L 键循环切换
+                e.Handled = true;
+                _isLooping = !_isLooping;
+                RepeatIcon.Foreground = _isLooping 
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
+                    : new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(128, 255, 255, 255));
+                ShowControls();
+                RestartHideTimer();
+            }
+        }
+
+        private void TogglePlayPause()
+        {
+            if (_player == null)
+                return;
+
+            if (_player.IsPlaying)
+            {
+                _player.Pause();
+            }
+            else
+            {
+                _player.Play();
+            }
         }
 
         private void FFmpegVideoPlayerControl_Loaded(object sender, RoutedEventArgs e)
@@ -87,10 +184,41 @@ namespace Photo.Controls
                 if (_player.Open(file.Path))
                 {
                     ProgressSlider.Maximum = _player.Duration;
+                    
+                    // 根据视频时长判断是否为短视频，并设置更精确的步进
+                    _isShortVideo = _player.Duration < 60;
+                    double stepFrequency;
+                    if (_player.Duration < 10)
+                    {
+                        // 非常短的视频：帧级精度
+                        stepFrequency = _player.FrameRate > 0 ? 1.0 / _player.FrameRate : 0.033;
+                    }
+                    else if (_player.Duration < 60)
+                    {
+                        // 短视频：0.1秒精度
+                        stepFrequency = 0.1;
+                    }
+                    else if (_player.Duration < 600)
+                    {
+                        // 中等视频：0.5秒精度
+                        stepFrequency = 0.5;
+                    }
+                    else
+                    {
+                        // 长视频：1秒精度
+                        stepFrequency = 1.0;
+                    }
+                    ProgressSlider.StepFrequency = stepFrequency;
+                    ProgressSlider.SmallChange = stepFrequency;
+                    ProgressSlider.LargeChange = stepFrequency * 10;
+                    
                     TotalTimeText.Text = FormatTime(_player.Duration);
                     _player.Play();
                     _positionUpdateTimer?.Start();
                     ShowControls();
+                    
+                    // 获取焦点以接收键盘事件
+                    Focus(FocusState.Programmatic);
                 }
                 else
                 {
@@ -160,6 +288,25 @@ namespace Photo.Controls
             if (_player == null || _isSeeking)
                 return;
 
+            // 如果有 seek 目标位置，检查是否已接近目标
+            if (_seekTargetPosition >= 0)
+            {
+                var currentPos = _player.Position;
+                // 当播放器位置接近 seek 目标时，清除目标位置
+                if (Math.Abs(currentPos - _seekTargetPosition) < 0.5)
+                {
+                    _seekTargetPosition = -1;
+                }
+                else
+                {
+                    // 还未到达目标，显示目标位置而非当前位置
+                    ProgressSlider.Value = _seekTargetPosition;
+                    CurrentTimeText.Text = FormatTime(_seekTargetPosition);
+                    TotalTimeText.Text = FormatTime(_player.Duration);
+                    return;
+                }
+            }
+
             ProgressSlider.Value = _player.Position;
             CurrentTimeText.Text = FormatTime(_player.Position);
             TotalTimeText.Text = FormatTime(_player.Duration);
@@ -170,6 +317,9 @@ namespace Photo.Controls
             var time = TimeSpan.FromSeconds(seconds);
             if (time.TotalHours >= 1)
                 return time.ToString(@"h\:mm\:ss");
+            // 短视频显示毫秒
+            if (_isShortVideo && seconds < 60)
+                return time.ToString(@"mm\:ss\.f");
             return time.ToString(@"mm\:ss");
         }
 
@@ -205,20 +355,26 @@ namespace Photo.Controls
         {
             if (_isSeeking && _player != null)
             {
-                _player.Seek(ProgressSlider.Value);
+                var targetPosition = ProgressSlider.Value;
+                _seekTargetPosition = targetPosition;
+                _player.Seek(targetPosition);
             }
             _isSeeking = false;
-            _positionUpdateTimer?.Start();
+            // 延迟启动定时器，给 seek 一些时间完成
+            DispatcherQueue.TryEnqueue(() => _positionUpdateTimer?.Start());
         }
 
         private void ProgressSlider_PointerCaptureLost(object sender, PointerRoutedEventArgs e)
         {
             if (_isSeeking && _player != null)
             {
-                _player.Seek(ProgressSlider.Value);
+                var targetPosition = ProgressSlider.Value;
+                _seekTargetPosition = targetPosition;
+                _player.Seek(targetPosition);
             }
             _isSeeking = false;
-            _positionUpdateTimer?.Start();
+            // 延迟启动定时器，给 seek 一些时间完成
+            DispatcherQueue.TryEnqueue(() => _positionUpdateTimer?.Start());
         }
 
         private void ProgressSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -234,7 +390,9 @@ namespace Photo.Controls
             if (_player == null)
                 return;
 
-            var newPosition = Math.Max(0, _player.Position - 10);
+            // 短视频使用更小的步进
+            var step = _isShortVideo ? 3.0 : 10.0;
+            var newPosition = Math.Max(0, _player.Position - step);
             _player.Seek(newPosition);
             RestartHideTimer();
         }
@@ -244,7 +402,9 @@ namespace Photo.Controls
             if (_player == null)
                 return;
 
-            var newPosition = Math.Min(_player.Duration, _player.Position + 10);
+            // 短视频使用更小的步进
+            var step = _isShortVideo ? 3.0 : 10.0;
+            var newPosition = Math.Min(_player.Duration, _player.Position + step);
             _player.Seek(newPosition);
             RestartHideTimer();
         }
