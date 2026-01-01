@@ -55,6 +55,10 @@ namespace Photo.Services
         private const long LargeFileSizeThreshold = 100 * 1024 * 1024; // 100MB
         private const long LargeFileDurationThreshold = 600; // 10分钟
         
+        // Thread safety locks
+        private readonly object _ffmpegLock = new object();
+        private readonly object _bufferLock = new object();
+        
         public event EventHandler<WriteableBitmap>? FrameReady;
         public event EventHandler? PlaybackStarted;
         public event EventHandler? PlaybackPaused;
@@ -379,34 +383,40 @@ namespace Photo.Services
             // 清空 packet 队列
             ClearPacketQueues();
             
-            // 使用视频流的时间基准进行更精确的 seek
-            var videoStream = _formatContext->streams[_videoStreamIndex];
-            var timestamp = (long)(positionSeconds / ffmpeg.av_q2d(videoStream->time_base));
-            
-            // 对于短视频使用更精确的 seek 标志
-            int seekFlags = ffmpeg.AVSEEK_FLAG_BACKWARD;
-            if (Duration < 60) // 短视频使用帧级精度
+            lock (_ffmpegLock)
             {
-                seekFlags |= ffmpeg.AVSEEK_FLAG_FRAME;
-            }
-            
-            // 尝试精确 seek
-            var result = ffmpeg.av_seek_frame(_formatContext, _videoStreamIndex, timestamp, seekFlags);
-            if (result < 0 && (seekFlags & ffmpeg.AVSEEK_FLAG_FRAME) != 0)
-            {
-                // 帧级精度失败，尝试普通 seek
-                ffmpeg.av_seek_frame(_formatContext, _videoStreamIndex, timestamp, ffmpeg.AVSEEK_FLAG_BACKWARD);
-            }
-            
-            ffmpeg.avcodec_flush_buffers(_videoCodecContext);
-            if (_audioCodecContext != null)
-            {
-                ffmpeg.avcodec_flush_buffers(_audioCodecContext);
+                if (_formatContext == null) return;
+
+                // 使用视频流的时间基准进行更精确的 seek
+                var videoStream = _formatContext->streams[_videoStreamIndex];
+                var timestamp = (long)(positionSeconds / ffmpeg.av_q2d(videoStream->time_base));
+                
+                // 对于短视频使用更精确的 seek 标志
+                int seekFlags = ffmpeg.AVSEEK_FLAG_BACKWARD;
+                if (Duration < 60) // 短视频使用帧级精度
+                {
+                    seekFlags |= ffmpeg.AVSEEK_FLAG_FRAME;
+                }
+                
+                // 尝试精确 seek
+                var result = ffmpeg.av_seek_frame(_formatContext, _videoStreamIndex, timestamp, seekFlags);
+                if (result < 0 && (seekFlags & ffmpeg.AVSEEK_FLAG_FRAME) != 0)
+                {
+                    // 帧级精度失败，尝试普通 seek
+                    ffmpeg.av_seek_frame(_formatContext, _videoStreamIndex, timestamp, ffmpeg.AVSEEK_FLAG_BACKWARD);
+                }
+                
+                ffmpeg.avcodec_flush_buffers(_videoCodecContext);
+                if (_audioCodecContext != null)
+                {
+                    ffmpeg.avcodec_flush_buffers(_audioCodecContext);
+                }
             }
             _waveProvider?.ClearBuffer();
             
             // 更新当前位置
-            _currentPts = timestamp;
+            // 注意：这里只是近似，准确位置会在读取下一帧时更新
+            // _currentPts = timestamp; 
         }
         
         private void ClearPacketQueues()
@@ -461,7 +471,13 @@ namespace Photo.Services
                     }
                     
                     var packet = ffmpeg.av_packet_alloc();
-                    var readResult = ffmpeg.av_read_frame(_formatContext, packet);
+                    int readResult;
+                    
+                    lock (_ffmpegLock)
+                    {
+                        if (_formatContext == null) break;
+                        readResult = ffmpeg.av_read_frame(_formatContext, packet);
+                    }
                     
                     if (readResult < 0)
                     {
@@ -554,7 +570,20 @@ namespace Photo.Services
                     else
                     {
                         // 小文件模式：直接读取
-                        if (ffmpeg.av_read_frame(_formatContext, packet) < 0)
+                        int readResult;
+                        lock (_ffmpegLock)
+                        {
+                            if (_formatContext == null)
+                            {
+                                readResult = -1;
+                            }
+                            else
+                            {
+                                readResult = ffmpeg.av_read_frame(_formatContext, packet);
+                            }
+                        }
+
+                        if (readResult < 0)
                         {
                             // 播放结束
                             _isPlaying = false;
@@ -623,8 +652,11 @@ namespace Photo.Services
                         Thread.Sleep((int)(delay * 1000));
 
                     // 转换为 BGRA
-                    ffmpeg.sws_scale(_swsContext, _frame->data, _frame->linesize, 0, Height,
-                        _frameRGB->data, _frameRGB->linesize);
+                    lock (_bufferLock)
+                    {
+                        ffmpeg.sws_scale(_swsContext, _frame->data, _frame->linesize, 0, Height,
+                            _frameRGB->data, _frameRGB->linesize);
+                    }
 
                     // 在 UI 线程上更新 WriteableBitmap（复用以提高性能）
                     var buffer = _videoBuffer;
@@ -638,7 +670,12 @@ namespace Photo.Services
                             {
                                 _reusableBitmap = new WriteableBitmap(width, height);
                             }
-                            buffer.AsBuffer().CopyTo(_reusableBitmap.PixelBuffer);
+                            
+                            lock (_bufferLock)
+                            {
+                                buffer.AsBuffer().CopyTo(_reusableBitmap.PixelBuffer);
+                            }
+                            
                             _reusableBitmap.Invalidate();
                             FrameReady?.Invoke(this, _reusableBitmap);
                         }
@@ -752,9 +789,12 @@ namespace Photo.Services
 
             if (_formatContext != null)
             {
-                var formatContext = _formatContext;
-                ffmpeg.avformat_close_input(&formatContext);
-                _formatContext = null;
+                lock (_ffmpegLock)
+                {
+                    var formatContext = _formatContext;
+                    ffmpeg.avformat_close_input(&formatContext);
+                    _formatContext = null;
+                }
             }
 
             _videoStreamIndex = -1;
