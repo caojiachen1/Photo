@@ -288,6 +288,14 @@ namespace Photo.Controls
             if (_player == null || _isSeeking)
                 return;
 
+            // 如果播放器正在 seek，保持显示目标位置
+            if (_player.IsSeeking && _seekTargetPosition >= 0)
+            {
+                ProgressSlider.Value = _seekTargetPosition;
+                CurrentTimeText.Text = FormatTime(_seekTargetPosition);
+                return;
+            }
+
             // 如果有 seek 目标位置，检查是否已接近目标
             if (_seekTargetPosition >= 0)
             {

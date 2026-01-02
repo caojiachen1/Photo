@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using FFmpeg.AutoGen;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Windows.Storage.Streams;
 
@@ -44,10 +45,15 @@ namespace Photo.Services
         
         // Audio playback
         private BufferedWaveProvider? _waveProvider;
-        private WaveOutEvent? _waveOut;
+        private WasapiOut? _waveOut;
         private readonly object _seekLock = new object();
         private bool _seekRequested = false;
         private double _seekTarget = 0;
+        private double _minSeekTime = -1; // 用于精确 Seek
+        private double _audioTimeBase;
+        private double _lastAudioPts; // In seconds
+        private bool _audioClockInitialized = false;
+        private DateTime _lastPositionUpdate = DateTime.MinValue;
         
         // Performance optimization - reusable bitmap
         private WriteableBitmap? _reusableBitmap;
@@ -79,6 +85,16 @@ namespace Photo.Services
             ? _currentPts * ffmpeg.av_q2d(_formatContext->streams[_videoStreamIndex]->time_base) 
             : 0;
         public bool IsPlaying => _isPlaying && !_isPaused;
+        public bool IsSeeking
+        {
+            get
+            {
+                lock (_seekLock)
+                {
+                    return _seekRequested;
+                }
+            }
+        }
         public bool IsMuted
         {
             get => _isMuted;
@@ -110,6 +126,17 @@ namespace Photo.Services
         public FFmpegVideoPlayer(DispatcherQueue dispatcherQueue)
         {
             _dispatcherQueue = dispatcherQueue;
+            try
+            {
+                // 获取当前系统音量
+                using var enumerator = new MMDeviceEnumerator();
+                using var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                _volume = device.AudioEndpointVolume.MasterVolumeLevelScalar;
+            }
+            catch
+            {
+                _volume = 0.5f; // 获取失败时默认为 50%
+            }
         }
 
         static FFmpegVideoPlayer()
@@ -196,13 +223,19 @@ namespace Photo.Services
                 
                 if (AppSettings.UseHardwareAcceleration)
                 {
-                    // 优先尝试 D3D11VA
-                    if (ffmpeg.av_hwdevice_find_type_by_name("d3d11va") != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
+                    // 优先尝试 CUDA (NVIDIA)
+                    if (ffmpeg.av_hwdevice_find_type_by_name("cuda") != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
+                    {
+                        hwType = AVHWDeviceType.AV_HWDEVICE_TYPE_CUDA;
+                        _hwPixelFormat = AVPixelFormat.AV_PIX_FMT_CUDA;
+                    }
+                    // 其次尝试 D3D11VA
+                    else if (ffmpeg.av_hwdevice_find_type_by_name("d3d11va") != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
                     {
                         hwType = AVHWDeviceType.AV_HWDEVICE_TYPE_D3D11VA;
                         _hwPixelFormat = AVPixelFormat.AV_PIX_FMT_D3D11;
                     }
-                    // 其次尝试 DXVA2
+                    // 最后尝试 DXVA2
                     else if (ffmpeg.av_hwdevice_find_type_by_name("dxva2") != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
                     {
                         hwType = AVHWDeviceType.AV_HWDEVICE_TYPE_DXVA2;
@@ -347,13 +380,17 @@ namespace Photo.Services
                 // 初始化 NAudio 播放器
                 _waveProvider = new BufferedWaveProvider(new WaveFormat(44100, 16, 2))
                 {
-                    BufferDuration = TimeSpan.FromSeconds(_isLargeFile ? 10 : 5), // 大文件更大的缓冲
+                    BufferDuration = TimeSpan.FromSeconds(_isLargeFile ? 5 : 2), // 减小缓冲区以降低延迟
                     DiscardOnBufferOverflow = true
                 };
 
-                _waveOut = new WaveOutEvent();
+                // 使用 WasapiOut 替代 WaveOutEvent 以获得更低的延迟
+                _waveOut = new WasapiOut(AudioClientShareMode.Shared, 50); // 50ms latency
                 _waveOut.Init(_waveProvider);
                 _waveOut.Volume = _volume;
+                
+                _audioTimeBase = ffmpeg.av_q2d(_formatContext->streams[_audioStreamIndex]->time_base);
+                _audioClockInitialized = false;
             }
             catch (Exception ex)
             {
@@ -451,32 +488,23 @@ namespace Photo.Services
                 var videoStream = _formatContext->streams[_videoStreamIndex];
                 var timestamp = (long)(positionSeconds / ffmpeg.av_q2d(videoStream->time_base));
                 
-                // 对于短视频使用更精确的 seek 标志
-                int seekFlags = ffmpeg.AVSEEK_FLAG_BACKWARD;
-                if (Duration < 60) // 短视频使用帧级精度
-                {
-                    seekFlags |= ffmpeg.AVSEEK_FLAG_FRAME;
-                }
+                // 设置最小 seek 时间，用于解码时丢弃之前的帧
+                _minSeekTime = positionSeconds;
                 
-                // 尝试精确 seek
-                var result = ffmpeg.av_seek_frame(_formatContext, _videoStreamIndex, timestamp, seekFlags);
-                if (result < 0 && (seekFlags & ffmpeg.AVSEEK_FLAG_FRAME) != 0)
-                {
-                    // 帧级精度失败，尝试普通 seek
-                    ffmpeg.av_seek_frame(_formatContext, _videoStreamIndex, timestamp, ffmpeg.AVSEEK_FLAG_BACKWARD);
-                }
+                // 始终向后 seek 到关键帧，然后通过解码丢弃帧来达到精确位置
+                ffmpeg.av_seek_frame(_formatContext, _videoStreamIndex, timestamp, ffmpeg.AVSEEK_FLAG_BACKWARD);
                 
                 ffmpeg.avcodec_flush_buffers(_videoCodecContext);
                 if (_audioCodecContext != null)
                 {
                     ffmpeg.avcodec_flush_buffers(_audioCodecContext);
                 }
+                
+                // 更新当前位置
+                // 注意：这里只是近似，准确位置会在读取下一帧时更新
+                _currentPts = timestamp;
             }
             _waveProvider?.ClearBuffer();
-            
-            // 更新当前位置
-            // 注意：这里只是近似，准确位置会在读取下一帧时更新
-            // _currentPts = timestamp; 
         }
         
         private void ClearPacketQueues()
@@ -694,6 +722,18 @@ namespace Photo.Services
 
         private bool _isRendering = false; // UI rendering backpressure flag
 
+        private double GetMasterClock(double defaultTime)
+        {
+            if (_audioStreamIndex >= 0 && _waveOut != null && _audioClockInitialized)
+            {
+                // Audio Clock: Last PTS - Buffered Duration
+                // This approximates the time of the audio currently being heard
+                // WasapiOut latency is small (~20-50ms), but we can compensate slightly
+                return _lastAudioPts - _waveProvider!.BufferedDuration.TotalSeconds;
+            }
+            return defaultTime;
+        }
+
         private void ProcessVideoPacket(AVPacket* packet, ref long firstPts, ref DateTime startTime, double timeBase)
         {
             if (ffmpeg.avcodec_send_packet(_videoCodecContext, packet) == 0)
@@ -717,18 +757,130 @@ namespace Photo.Services
 
                     _currentPts = frameToProcess->pts;
                     
+                    // 精确 Seek 逻辑：丢弃目标时间之前的帧
+                    if (_minSeekTime >= 0)
+                    {
+                        double currentVideoTime = _currentPts * timeBase;
+                        if (currentVideoTime < _minSeekTime)
+                        {
+                            // 丢弃该帧
+                            if (frameToProcess == _swFrame)
+                            {
+                                ffmpeg.av_frame_unref(_swFrame);
+                            }
+                            continue;
+                        }
+                        else
+                        {
+                            // 到达目标位置，重置状态
+                            _minSeekTime = -1;
+                            firstPts = _currentPts;
+                            startTime = DateTime.Now;
+                            // 重置音频时钟状态，避免同步问题
+                            _audioClockInitialized = false;
+                        }
+                    }
+
                     if (firstPts < 0)
                         firstPts = _currentPts;
 
                     // 计算帧的显示时间
                     var framePts = (_currentPts - firstPts) * timeBase;
                     var elapsed = (DateTime.Now - startTime).TotalSeconds;
+
+                    // 如果有音频，使用音频时钟进行同步
+                    if (_audioStreamIndex >= 0 && _waveOut != null)
+                    {
+                        // 视频当前帧的绝对时间戳（秒）
+                        double currentVideoTime = _currentPts * timeBase;
+                        // 获取主时钟（音频时钟）
+                        double masterClock = GetMasterClock(currentVideoTime);
+                        
+                        // 如果音频时钟未初始化（刚开始播放或Seek后），暂时使用系统时钟
+                        if (_audioClockInitialized)
+                        {
+                            // delay = VideoTime - AudioTime
+                            // > 0: Video ahead, wait
+                            // < 0: Video behind, catch up
+                            var diff = currentVideoTime - masterClock;
+                            
+                            // 阈值保护，避免异常跳变
+                            if (Math.Abs(diff) < 10.0)
+                            {
+                                // 使用 diff 作为 delay
+                                // 但需要考虑系统时钟的流逝，这里直接用 diff 即可，因为 masterClock 是动态更新的
+                                // 为了平滑，可以结合 elapsed
+                                
+                                // 简单策略：直接对齐音频
+                                // elapsed = masterClock; // 仅用于调试或日志
+                                
+                                // 重新计算 delay
+                                // 我们希望在 masterClock 到达 currentVideoTime 时显示该帧
+                                // 当前 masterClock 是 X，目标是 currentVideoTime
+                                // 需要等待 currentVideoTime - X
+                                var syncDelay = currentVideoTime - masterClock;
+                                
+                                // 如果 syncDelay > 0，说明视频快了，需要等待
+                                // 如果 syncDelay < 0，说明视频慢了，需要追赶
+                                
+                                if (syncDelay > 0 && syncDelay < 1)
+                                {
+                                    if (syncDelay > 0.015) // > 15ms
+                                    {
+                                        Thread.Sleep((int)(syncDelay * 1000));
+                                    }
+                                    else
+                                    {
+                                        // Busy wait for high precision
+                                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                                        while (sw.Elapsed.TotalSeconds < syncDelay)
+                                        {
+                                            Thread.SpinWait(100);
+                                        }
+                                    }
+                                }
+                                else if (syncDelay < -0.05) // 落后超过 50ms
+                                {
+                                    // 丢帧
+                                    if (frameToProcess == _swFrame)
+                                    {
+                                        ffmpeg.av_frame_unref(_swFrame);
+                                    }
+                                    
+                                    // Throttle PositionChanged events
+                                    if ((DateTime.Now - _lastPositionUpdate).TotalMilliseconds > 250)
+                                    {
+                                        PositionChanged?.Invoke(this, _currentPts);
+                                        _lastPositionUpdate = DateTime.Now;
+                                    }
+                                    continue;
+                                }
+                                
+                                // 如果同步正常，继续渲染
+                                goto Render;
+                            }
+                        }
+                    }
+
+                    // Fallback to System Clock (No Audio or Audio not ready)
                     var delay = framePts - elapsed;
 
                     // 帧同步逻辑
                     if (delay > 0 && delay < 1)
                     {
-                        Thread.Sleep((int)(delay * 1000));
+                        if (delay > 0.015) // > 15ms
+                        {
+                            Thread.Sleep((int)(delay * 1000));
+                        }
+                        else
+                        {
+                            // Busy wait for high precision
+                            var sw = System.Diagnostics.Stopwatch.StartNew();
+                            while (sw.Elapsed.TotalSeconds < delay)
+                            {
+                                Thread.SpinWait(100);
+                            }
+                        }
                     }
                     else if (delay < -0.05) // 如果落后超过 50ms，丢弃该帧的渲染
                     {
@@ -737,7 +889,31 @@ namespace Photo.Services
                         {
                             ffmpeg.av_frame_unref(_swFrame);
                         }
-                        PositionChanged?.Invoke(this, _currentPts);
+                        
+                        // Throttle PositionChanged events
+                        if ((DateTime.Now - _lastPositionUpdate).TotalMilliseconds > 250)
+                        {
+                            PositionChanged?.Invoke(this, _currentPts);
+                            _lastPositionUpdate = DateTime.Now;
+                        }
+                        continue;
+                    }
+
+                Render:
+                    // UI 渲染背压检查：如果上一帧还在渲染，丢弃当前帧
+                    if (_isRendering)
+                    {
+                        if (frameToProcess == _swFrame)
+                        {
+                            ffmpeg.av_frame_unref(_swFrame);
+                        }
+                        
+                        // Throttle PositionChanged events
+                        if ((DateTime.Now - _lastPositionUpdate).TotalMilliseconds > 250)
+                        {
+                            PositionChanged?.Invoke(this, _currentPts);
+                            _lastPositionUpdate = DateTime.Now;
+                        }
                         continue;
                     }
 
@@ -805,7 +981,12 @@ namespace Photo.Services
                         }
                     });
                     
-                    PositionChanged?.Invoke(this, _currentPts);
+                    // Throttle PositionChanged events
+                    if ((DateTime.Now - _lastPositionUpdate).TotalMilliseconds > 250)
+                    {
+                        PositionChanged?.Invoke(this, _currentPts);
+                        _lastPositionUpdate = DateTime.Now;
+                    }
 
                     // Clean up swFrame if used
                     if (frameToProcess == _swFrame)
@@ -822,6 +1003,16 @@ namespace Photo.Services
             {
                 while (ffmpeg.avcodec_receive_frame(_audioCodecContext, _audioFrame) == 0)
                 {
+                    // 检查是否需要丢弃（配合精确 Seek）
+                    if (_minSeekTime >= 0 && _audioFrame->pts != ffmpeg.AV_NOPTS_VALUE)
+                    {
+                        double currentAudioTime = _audioFrame->pts * _audioTimeBase;
+                        if (currentAudioTime < _minSeekTime)
+                        {
+                            continue;
+                        }
+                    }
+
                     // 计算输出采样数
                     var outSamples = (int)ffmpeg.av_rescale_rnd(
                         ffmpeg.swr_get_delay(_swrContext, _audioCodecContext->sample_rate) + _audioFrame->nb_samples,
@@ -847,6 +1038,13 @@ namespace Photo.Services
                         var audioData = new byte[dataSize];
                         Marshal.Copy((IntPtr)outBuffer, audioData, 0, dataSize);
                         _waveProvider?.AddSamples(audioData, 0, dataSize);
+
+                        // 更新音频时钟
+                        if (_audioFrame->pts != ffmpeg.AV_NOPTS_VALUE)
+                        {
+                            _lastAudioPts = _audioFrame->pts * _audioTimeBase;
+                            _audioClockInitialized = true;
+                        }
                     }
 
                     ffmpeg.av_freep(&outBuffer);
