@@ -35,6 +35,13 @@ namespace Photo.Services
         private float _volume = 1.0f;
         private bool _isMuted = false;
         
+        // Hardware Acceleration
+        private AVBufferRef* _hwDeviceContext = null;
+        private AVPixelFormat _hwPixelFormat = AVPixelFormat.AV_PIX_FMT_NONE;
+        private AVCodecContext_get_format? _getFormatCallback;
+        private AVFrame* _swFrame; // Temporary frame for HW download
+        private AVPixelFormat _currentSwsFormat = AVPixelFormat.AV_PIX_FMT_NONE;
+        
         // Audio playback
         private BufferedWaveProvider? _waveProvider;
         private WaveOutEvent? _waveOut;
@@ -115,6 +122,20 @@ namespace Photo.Services
             // FFmpeg 6.0+ 不再需要调用 av_register_all()
         }
 
+        private AVPixelFormat GetFormat(AVCodecContext* ctx, AVPixelFormat* pix_fmts)
+        {
+            while (*pix_fmts != AVPixelFormat.AV_PIX_FMT_NONE)
+            {
+                if (*pix_fmts == _hwPixelFormat)
+                {
+                    return *pix_fmts;
+                }
+                pix_fmts++;
+            }
+
+            return ffmpeg.avcodec_default_get_format(ctx, pix_fmts);
+        }
+
         public bool Open(string filePath)
         {
             Close();
@@ -170,6 +191,43 @@ namespace Photo.Services
                 if (ffmpeg.avcodec_parameters_to_context(_videoCodecContext, videoCodecParameters) < 0)
                     return false;
 
+                // 尝试启用硬件加速
+                var hwType = AVHWDeviceType.AV_HWDEVICE_TYPE_NONE;
+                
+                if (AppSettings.UseHardwareAcceleration)
+                {
+                    // 优先尝试 D3D11VA
+                    if (ffmpeg.av_hwdevice_find_type_by_name("d3d11va") != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
+                    {
+                        hwType = AVHWDeviceType.AV_HWDEVICE_TYPE_D3D11VA;
+                        _hwPixelFormat = AVPixelFormat.AV_PIX_FMT_D3D11;
+                    }
+                    // 其次尝试 DXVA2
+                    else if (ffmpeg.av_hwdevice_find_type_by_name("dxva2") != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
+                    {
+                        hwType = AVHWDeviceType.AV_HWDEVICE_TYPE_DXVA2;
+                        _hwPixelFormat = AVPixelFormat.AV_PIX_FMT_DXVA2_VLD;
+                    }
+                }
+
+                if (hwType != AVHWDeviceType.AV_HWDEVICE_TYPE_NONE)
+                {
+                    AVBufferRef* hwDeviceContext = null;
+                    if (ffmpeg.av_hwdevice_ctx_create(&hwDeviceContext, hwType, null, null, 0) >= 0)
+                    {
+                        _hwDeviceContext = hwDeviceContext;
+                        _videoCodecContext->hw_device_ctx = ffmpeg.av_buffer_ref(_hwDeviceContext);
+                        _getFormatCallback = GetFormat;
+                        _videoCodecContext->get_format = _getFormatCallback;
+                        System.Diagnostics.Debug.WriteLine($"启用硬件加速: {hwType}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("无法创建硬件设备上下文");
+                        _hwPixelFormat = AVPixelFormat.AV_PIX_FMT_NONE;
+                    }
+                }
+
                 if (ffmpeg.avcodec_open2(_videoCodecContext, videoCodec, null) < 0)
                     return false;
 
@@ -186,6 +244,7 @@ namespace Photo.Services
                 _isLargeFile = fileInfo.Length > LargeFileSizeThreshold || Duration > LargeFileDurationThreshold;
 
                 _frame = ffmpeg.av_frame_alloc();
+                _swFrame = ffmpeg.av_frame_alloc();
                 _frameRGB = ffmpeg.av_frame_alloc();
 
                 var numBytes = ffmpeg.av_image_get_buffer_size(AVPixelFormat.AV_PIX_FMT_BGRA, Width, Height, 1);
@@ -213,6 +272,7 @@ namespace Photo.Services
                     Width, Height, _videoCodecContext->pix_fmt,
                     Width, Height, AVPixelFormat.AV_PIX_FMT_BGRA,
                     _isLargeFile ? 4 : 2, null, null, null); // SWS_FAST_BILINEAR=1, SWS_BILINEAR=2, SWS_BICUBIC=4
+                _currentSwsFormat = _videoCodecContext->pix_fmt;
 
                 // 初始化音频解码器
                 if (_audioStreamIndex >= 0)
@@ -632,13 +692,30 @@ namespace Photo.Services
             }
         }
 
+        private bool _isRendering = false; // UI rendering backpressure flag
+
         private void ProcessVideoPacket(AVPacket* packet, ref long firstPts, ref DateTime startTime, double timeBase)
         {
             if (ffmpeg.avcodec_send_packet(_videoCodecContext, packet) == 0)
             {
                 while (ffmpeg.avcodec_receive_frame(_videoCodecContext, _frame) == 0)
                 {
-                    _currentPts = _frame->pts;
+                    AVFrame* frameToProcess = _frame;
+
+                    // 如果是硬件帧，需要传输到系统内存
+                    if (_frame->format == (int)_hwPixelFormat && _hwPixelFormat != AVPixelFormat.AV_PIX_FMT_NONE)
+                    {
+                        if (ffmpeg.av_hwframe_transfer_data(_swFrame, _frame, 0) < 0)
+                        {
+                            continue;
+                        }
+                        // 复制时间戳等信息
+                        _swFrame->pts = _frame->pts;
+                        _swFrame->pkt_dts = _frame->pkt_dts;
+                        frameToProcess = _swFrame;
+                    }
+
+                    _currentPts = frameToProcess->pts;
                     
                     if (firstPts < 0)
                         firstPts = _currentPts;
@@ -648,13 +725,51 @@ namespace Photo.Services
                     var elapsed = (DateTime.Now - startTime).TotalSeconds;
                     var delay = framePts - elapsed;
 
+                    // 帧同步逻辑
                     if (delay > 0 && delay < 1)
+                    {
                         Thread.Sleep((int)(delay * 1000));
+                    }
+                    else if (delay < -0.05) // 如果落后超过 50ms，丢弃该帧的渲染
+                    {
+                        // Clean up swFrame if used
+                        if (frameToProcess == _swFrame)
+                        {
+                            ffmpeg.av_frame_unref(_swFrame);
+                        }
+                        PositionChanged?.Invoke(this, _currentPts);
+                        continue;
+                    }
+
+                    // UI 渲染背压检查：如果上一帧还在渲染，丢弃当前帧
+                    if (_isRendering)
+                    {
+                        if (frameToProcess == _swFrame)
+                        {
+                            ffmpeg.av_frame_unref(_swFrame);
+                        }
+                        PositionChanged?.Invoke(this, _currentPts);
+                        continue;
+                    }
+
+                    // 检查是否需要重新初始化 swsContext
+                    var sourceFormat = (AVPixelFormat)frameToProcess->format;
+                    if (_swsContext == null || _currentSwsFormat != sourceFormat)
+                    {
+                        if (_swsContext != null)
+                            ffmpeg.sws_freeContext(_swsContext);
+                            
+                        _swsContext = ffmpeg.sws_getContext(
+                            Width, Height, sourceFormat,
+                            Width, Height, AVPixelFormat.AV_PIX_FMT_BGRA,
+                            1, null, null, null); // SWS_FAST_BILINEAR = 1
+                        _currentSwsFormat = sourceFormat;
+                    }
 
                     // 转换为 BGRA
                     lock (_bufferLock)
                     {
-                        ffmpeg.sws_scale(_swsContext, _frame->data, _frame->linesize, 0, Height,
+                        ffmpeg.sws_scale(_swsContext, frameToProcess->data, frameToProcess->linesize, 0, Height,
                             _frameRGB->data, _frameRGB->linesize);
                     }
 
@@ -662,26 +777,41 @@ namespace Photo.Services
                     var buffer = _videoBuffer;
                     var width = Width;
                     var height = Height;
+                    
+                    _isRendering = true;
                     _dispatcherQueue.TryEnqueue(() =>
                     {
-                        lock (_bitmapLock)
+                        try
                         {
-                            if (_reusableBitmap == null || _reusableBitmap.PixelWidth != width || _reusableBitmap.PixelHeight != height)
+                            lock (_bitmapLock)
                             {
-                                _reusableBitmap = new WriteableBitmap(width, height);
+                                if (_reusableBitmap == null || _reusableBitmap.PixelWidth != width || _reusableBitmap.PixelHeight != height)
+                                {
+                                    _reusableBitmap = new WriteableBitmap(width, height);
+                                }
+                                
+                                lock (_bufferLock)
+                                {
+                                    buffer.AsBuffer().CopyTo(_reusableBitmap.PixelBuffer);
+                                }
+                                
+                                _reusableBitmap.Invalidate();
+                                FrameReady?.Invoke(this, _reusableBitmap);
                             }
-                            
-                            lock (_bufferLock)
-                            {
-                                buffer.AsBuffer().CopyTo(_reusableBitmap.PixelBuffer);
-                            }
-                            
-                            _reusableBitmap.Invalidate();
-                            FrameReady?.Invoke(this, _reusableBitmap);
+                        }
+                        finally
+                        {
+                            _isRendering = false;
                         }
                     });
                     
                     PositionChanged?.Invoke(this, _currentPts);
+
+                    // Clean up swFrame if used
+                    if (frameToProcess == _swFrame)
+                    {
+                        ffmpeg.av_frame_unref(_swFrame);
+                    }
                 }
             }
         }
@@ -766,11 +896,25 @@ namespace Photo.Services
                 _frameRGB = null;
             }
 
+            if (_swFrame != null)
+            {
+                var frame = _swFrame;
+                ffmpeg.av_frame_free(&frame);
+                _swFrame = null;
+            }
+
             if (_frame != null)
             {
                 var frame = _frame;
                 ffmpeg.av_frame_free(&frame);
                 _frame = null;
+            }
+
+            if (_hwDeviceContext != null)
+            {
+                var ctx = _hwDeviceContext;
+                ffmpeg.av_buffer_unref(&ctx);
+                _hwDeviceContext = null;
             }
 
             if (_audioCodecContext != null)

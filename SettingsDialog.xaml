@@ -99,6 +99,49 @@
                               OnContent=""
                               OffContent=""/>
             </Grid>
+
+            <!-- 硬件加速 -->
+            <Grid Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
+                  CornerRadius="4" 
+                  Padding="16,12"
+                  BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                  BorderThickness="1"
+                  Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 图标 -->
+                <FontIcon Grid.Column="0" 
+                          Glyph="&#xE7F5;" 
+                          FontSize="20" 
+                          Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                          VerticalAlignment="Center"
+                          Margin="0,0,16,0"/>
+
+                <!-- 文本 -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="视频播放硬件加速" 
+                               FontSize="14" 
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="使用 GPU 加速视频解码，提高性能但可能导致兼容性问题" 
+                               FontSize="12" 
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <!-- 开关 -->
+                <ToggleSwitch x:Name="HardwareAccelerationToggle" 
+                              Grid.Column="2" 
+                              VerticalAlignment="Center"
+                              HorizontalAlignment="Right"
+                              Margin="16,0,-100,0"
+                              OnContent=""
+                              OffContent=""/>
+            </Grid>
         </StackPanel>
     </ScrollViewer>
 </ContentDialog>

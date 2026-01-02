@@ -16,6 +16,12 @@ namespace Photo
             set => ShowFacesToggle.IsOn = value;
         }
 
+        public bool UseHardwareAcceleration
+        {
+            get => HardwareAccelerationToggle.IsOn;
+            set => HardwareAccelerationToggle.IsOn = value;
+        }
+
         public SettingsDialog()
         {
             this.InitializeComponent();

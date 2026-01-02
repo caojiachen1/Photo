@@ -9,6 +9,7 @@ namespace Photo.Services
     {
         bool ConfirmBeforeDelete { get; set; }
         bool ShowFaces { get; set; }
+        bool UseHardwareAcceleration { get; set; }
     }
 
     /// <summary>
@@ -19,6 +20,7 @@ namespace Photo.Services
         private readonly ApplicationDataContainer _localSettings;
         private const string ConfirmBeforeDeleteKey = "ConfirmBeforeDelete";
         private const string ShowFacesKey = "ShowFaces";
+        private const string UseHardwareAccelerationKey = "UseHardwareAcceleration";
 
         public SettingsService()
         {
@@ -48,6 +50,19 @@ namespace Photo.Services
             set
             {
                 _localSettings.Values[ShowFacesKey] = value;
+            }
+        }
+
+        public bool UseHardwareAcceleration
+        {
+            get
+            {
+                var value = _localSettings.Values[UseHardwareAccelerationKey];
+                return value is bool b ? b : true;
+            }
+            set
+            {
+                _localSettings.Values[UseHardwareAccelerationKey] = value;
             }
         }
     }

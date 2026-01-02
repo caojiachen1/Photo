@@ -526,7 +526,8 @@ namespace Photo
             {
                 XamlRoot = Content.XamlRoot,
                 ConfirmBeforeDelete = AppSettings.ConfirmBeforeDelete,
-                ShowFaces = AppSettings.ShowFaces
+                ShowFaces = AppSettings.ShowFaces,
+                UseHardwareAcceleration = AppSettings.UseHardwareAcceleration
             };
 
             var result = await dialog.ShowAsync();
@@ -539,6 +540,8 @@ namespace Photo
                     AppSettings.ShowFaces = dialog.ShowFaces;
                     UpdateFaceOverlay();
                 }
+
+                AppSettings.UseHardwareAcceleration = dialog.UseHardwareAcceleration;
             }
         }
 
