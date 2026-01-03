@@ -26,6 +26,7 @@ namespace Photo.Services
         private int _videoStreamIndex = -1;
         private int _audioStreamIndex = -1;
         private byte[]? _videoBuffer;
+        private GCHandle _videoBufferHandle;
         private bool _isPlaying;
         private bool _isPaused;
         private Thread? _playbackThread;
@@ -182,6 +183,7 @@ namespace Photo.Services
                 if (ffmpeg.avformat_find_stream_info(_formatContext, null) < 0)
                 {
                     System.Diagnostics.Debug.WriteLine("无法找到流信息");
+                    Close();
                     return false;
                 }
 
@@ -202,6 +204,7 @@ namespace Photo.Services
                 if (_videoStreamIndex == -1)
                 {
                     System.Diagnostics.Debug.WriteLine("未找到视频流");
+                    Close();
                     return false;
                 }
 
@@ -211,12 +214,16 @@ namespace Photo.Services
                 if (videoCodec == null)
                 {
                     System.Diagnostics.Debug.WriteLine($"无法找到视频解码器: {videoCodecParameters->codec_id}");
+                    Close();
                     return false;
                 }
 
                 _videoCodecContext = ffmpeg.avcodec_alloc_context3(videoCodec);
                 if (ffmpeg.avcodec_parameters_to_context(_videoCodecContext, videoCodecParameters) < 0)
+                {
+                    Close();
                     return false;
+                }
 
                 // 尝试启用硬件加速
                 var hwType = AVHWDeviceType.AV_HWDEVICE_TYPE_NONE;
@@ -262,7 +269,10 @@ namespace Photo.Services
                 }
 
                 if (ffmpeg.avcodec_open2(_videoCodecContext, videoCodec, null) < 0)
+                {
+                    Close();
                     return false;
+                }
 
                 Width = _videoCodecContext->width;
                 Height = _videoCodecContext->height;
@@ -282,23 +292,22 @@ namespace Photo.Services
 
                 var numBytes = ffmpeg.av_image_get_buffer_size(AVPixelFormat.AV_PIX_FMT_BGRA, Width, Height, 1);
                 _videoBuffer = new byte[numBytes];
+                _videoBufferHandle = GCHandle.Alloc(_videoBuffer, GCHandleType.Pinned);
+                var bufferPtr = (byte*)_videoBufferHandle.AddrOfPinnedObject();
 
-                fixed (byte* bufferPtr = _videoBuffer)
-                {
-                    var data = new byte_ptrArray4();
-                    var linesize = new int_array4();
+                var data = new byte_ptrArray4();
+                var linesize = new int_array4();
+                
+                ffmpeg.av_image_fill_arrays(
+                    ref data,
+                    ref linesize,
+                    bufferPtr,
+                    AVPixelFormat.AV_PIX_FMT_BGRA, Width, Height, 1);
                     
-                    ffmpeg.av_image_fill_arrays(
-                        ref data,
-                        ref linesize,
-                        bufferPtr,
-                        AVPixelFormat.AV_PIX_FMT_BGRA, Width, Height, 1);
-                        
-                    for (uint i = 0; i < 4; i++)
-                    {
-                        _frameRGB->data[i] = data[i];
-                        _frameRGB->linesize[i] = linesize[i];
-                    }
+                for (uint i = 0; i < 4; i++)
+                {
+                    _frameRGB->data[i] = data[i];
+                    _frameRGB->linesize[i] = linesize[i];
                 }
 
                 _swsContext = ffmpeg.sws_getContext(
@@ -917,16 +926,6 @@ namespace Photo.Services
                         continue;
                     }
 
-                    // UI 渲染背压检查：如果上一帧还在渲染，丢弃当前帧
-                    if (_isRendering)
-                    {
-                        if (frameToProcess == _swFrame)
-                        {
-                            ffmpeg.av_frame_unref(_swFrame);
-                        }
-                        PositionChanged?.Invoke(this, _currentPts);
-                        continue;
-                    }
 
                     // 检查是否需要重新初始化 swsContext
                     var sourceFormat = (AVPixelFormat)frameToProcess->format;
@@ -1064,6 +1063,12 @@ namespace Photo.Services
             {
                 _reusableBitmap = null;
             }
+
+            if (_videoBufferHandle.IsAllocated)
+            {
+                _videoBufferHandle.Free();
+            }
+            _videoBuffer = null;
 
             if (_swrContext != null)
             {
