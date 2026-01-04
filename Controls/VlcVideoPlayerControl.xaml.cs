@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Photo.ViewModels;
 using LibVLCSharp.Platforms.Windows;
 
@@ -24,6 +25,11 @@ namespace Photo.Controls
         private void VLCVideoPlayerControl_Unloaded(object sender, RoutedEventArgs e)
         {
             ViewModel.Dispose();
+        }
+
+        private void ContentArea_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            ViewModel.ToggleControlsCommand.Execute(null);
         }
     }
 }

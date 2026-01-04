@@ -39,6 +39,7 @@ namespace Photo.ViewModels
             VolumeDownCommand = new RelayCommand(VolumeDown);
             MuteCommand = new RelayCommand(Mute);
             FullScreenCommand = new RelayCommand(ToggleFullScreen);
+            ToggleControlsCommand = new RelayCommand(ToggleControls);
             
             // Placeholder commands for events
             ScrollChangedCommand = new RelayCommand(() => { });
@@ -113,6 +114,7 @@ namespace Photo.ViewModels
         public RelayCommand VolumeDownCommand { get; }
         public RelayCommand MuteCommand { get; }
         public RelayCommand FullScreenCommand { get; }
+        public RelayCommand ToggleControlsCommand { get; }
         public RelayCommand ScrollChangedCommand { get; }
         public RelayCommand<InitializedEventArgs> InitializedCommand { get; }
         public RelayCommand PointerMovedCommand { get; }
@@ -262,6 +264,11 @@ namespace Photo.ViewModels
         {
             IsNotFullScreen = !IsNotFullScreen;
             // Logic to toggle fullscreen in view would be needed, usually via event or service
+        }
+
+        private void ToggleControls()
+        {
+            ControlsVisibility = ControlsVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
         }
 
         public void Dispose()

@@ -30,6 +30,9 @@
                        Initialized="VideoView_Initialized">
         </lvs:VideoView>
 
+        <!-- 点击切换进度条显示 -->
+        <Grid Background="Transparent" Tapped="ContentArea_Tapped"/>
+
         <!-- 自定义传输控件 -->
         <Grid x:Name="TransportControlsPanel"
               VerticalAlignment="Bottom"
