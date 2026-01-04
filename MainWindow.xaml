@@ -255,11 +255,11 @@
                 </Grid>
             </ScrollViewer>
 
-            <!-- FFmpeg 视频播放器 -->
-            <controls:FFmpegVideoPlayerControl x:Name="VideoPlayer"
-                                               Visibility="{x:Bind ViewModel.VideoVisibility, Mode=OneWay}"
-                                               HorizontalAlignment="Stretch"
-                                               VerticalAlignment="Stretch"/>
+            <!-- VLC 视频播放器 -->
+            <controls:VLCVideoPlayerControl x:Name="VideoPlayer"
+                                            Visibility="{x:Bind ViewModel.VideoVisibility, Mode=OneWay}"
+                                            HorizontalAlignment="Stretch"
+                                            VerticalAlignment="Stretch"/>
 
             <!-- 无图片时的占位符 -->
             <StackPanel x:Name="PlaceholderPanel" 

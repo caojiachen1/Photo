@@ -746,14 +746,17 @@ namespace Photo
         {
             if (e.PropertyName == nameof(ViewModel.VideoFile))
             {
-                if (ViewModel.VideoFile != null)
+                DispatcherQueue.TryEnqueue(() =>
                 {
-                    VideoPlayer.LoadVideo(ViewModel.VideoFile);
-                }
-                else
-                {
-                    VideoPlayer.Stop();
-                }
+                    if (ViewModel.VideoFile != null)
+                    {
+                        VideoPlayer.ViewModel.FilePath = ViewModel.VideoFile.Path;
+                    }
+                    else
+                    {
+                        VideoPlayer.ViewModel.StopCommand.Execute(null);
+                    }
+                });
             }
         }
 

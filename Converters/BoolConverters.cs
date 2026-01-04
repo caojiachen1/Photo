@@ -29,6 +29,30 @@ namespace Photo
     }
 
     /// <summary>
+    /// Bool 反转转 Visibility 转换器
+    /// </summary>
+    public class InverseBoolToVisibilityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            if (value is bool boolValue)
+            {
+                return boolValue ? Visibility.Collapsed : Visibility.Visible;
+            }
+            return Visibility.Visible;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        {
+            if (value is Visibility visibility)
+            {
+                return visibility != Visibility.Visible;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Bool 反转转换器
     /// </summary>
     public class InverseBoolConverter : IValueConverter

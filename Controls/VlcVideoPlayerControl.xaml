@@ -1,0 +1,148 @@
+<UserControl
+    x:Class="Photo.Controls.VLCVideoPlayerControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:lvs="using:LibVLCSharp.Platforms.Windows"
+    xmlns:converters="using:Photo.Converters"
+    xmlns:local="using:Photo"
+    xmlns:usercontrols="using:Photo.Controls"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <converters:LongToDoubleConverter x:Key="LongToDoubleConverter" />
+        <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
+        <local:InverseBoolConverter x:Key="BoolNegationConverter" />
+        <local:PlayPauseIconConverter x:Key="PlayPauseIconConverter" />
+        <Style x:Key="DefaultAppBarButtonStyle" TargetType="AppBarButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{ThemeResource TextControlForeground}"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="ContentArea" Background="#1F1F1F">
+        <!-- 视频显示 -->
+        <lvs:VideoView x:Name="VideoView"
+                       HorizontalAlignment="Stretch"
+                       VerticalAlignment="Stretch"
+                       MediaPlayer="{x:Bind ViewModel.Player}"
+                       Initialized="VideoView_Initialized">
+        </lvs:VideoView>
+
+        <!-- 自定义传输控件 -->
+        <Grid x:Name="TransportControlsPanel"
+              VerticalAlignment="Bottom"
+              HorizontalAlignment="Center"
+              Visibility="{x:Bind ViewModel.ControlsVisibility, Mode=OneWay}"
+              Margin="0,0,0,16"
+              Background="#2A2A2A"
+              CornerRadius="6"
+              Padding="8,4"
+              Height="40">
+            
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 播放/暂停 -->
+            <Button x:Name="PlayPauseButton"
+                    Grid.Column="0"
+                    Command="{x:Bind ViewModel.PlayPauseCommand}"
+                    Width="32" Height="32"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    ToolTipService.ToolTip="Play/Pause">
+                <FontIcon x:Name="PlayPauseIcon" 
+                          Glyph="{x:Bind ViewModel.MediaPlayerWrapper.IsPlaying, Mode=OneWay, Converter={StaticResource PlayPauseIconConverter}, FallbackValue='&#xE768;'}" 
+                          FontSize="14" 
+                          Foreground="White"/>
+            </Button>
+
+            <!-- 快退10秒 -->
+            <Button x:Name="RewindButton"
+                    Grid.Column="1"
+                    Command="{x:Bind ViewModel.RewindCommand}"
+                    Width="32" Height="32"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    ToolTipService.ToolTip="Rewind 10s">
+                <FontIcon Glyph="&#xE892;" FontSize="12" Foreground="White"/>
+            </Button>
+
+            <!-- 快进30秒 -->
+            <Button x:Name="ForwardButton"
+                    Grid.Column="2"
+                    Command="{x:Bind ViewModel.FastForwardCommand}"
+                    Width="32" Height="32"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    ToolTipService.ToolTip="Forward 30s">
+                <FontIcon Glyph="&#xE893;" FontSize="12" Foreground="White"/>
+            </Button>
+
+            <!-- 音量 -->
+            <Button x:Name="VolumeButton"
+                    Grid.Column="3"
+                    Command="{x:Bind ViewModel.MuteCommand}"
+                    Width="32" Height="32"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    ToolTipService.ToolTip="Mute/Unmute">
+                <FontIcon x:Name="VolumeIcon" Glyph="&#xE767;" FontSize="14" Foreground="White"/>
+            </Button>
+
+            <!-- Current Time -->
+            <TextBlock x:Name="CurrentTimeText" 
+                       Grid.Column="4" 
+                       Text="{x:Bind ViewModel.MediaPlayerWrapper.TimeString, Mode=OneWay, FallbackValue='00:00'}"
+                       VerticalAlignment="Center" 
+                       Margin="8,0,6,0" 
+                       Foreground="White" 
+                       FontSize="11"/>
+
+            <!-- 进度条 -->
+            <Slider x:Name="ProgressSlider"
+                    Grid.Column="5"
+                    VerticalAlignment="Center"
+                    Margin="0"
+                    Height="32"
+                    IsThumbToolTipEnabled="False"
+                    Maximum="{x:Bind ViewModel.MediaPlayerWrapper.TotalTimeLong, Mode=OneWay, Converter={StaticResource LongToDoubleConverter}}"
+                    Minimum="0"
+                    Value="{x:Bind ViewModel.MediaPlayerWrapper.TimeLong, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource LongToDoubleConverter}}"/>
+
+            <!-- Total Time -->
+            <TextBlock x:Name="TotalTimeText" 
+                       Grid.Column="6" 
+                       Text="{x:Bind ViewModel.MediaPlayerWrapper.TotalTimeString, Mode=OneWay, FallbackValue='00:00'}"
+                       VerticalAlignment="Center" 
+                       Margin="6,0,8,0" 
+                       Foreground="White" 
+                       FontSize="11"/>
+
+            <!-- 全屏 -->
+            <Button x:Name="FullScreenButton"
+                    Grid.Column="7"
+                    Command="{x:Bind ViewModel.FullScreenCommand}"
+                    Width="32" Height="32"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    ToolTipService.ToolTip="Full Screen">
+                <FontIcon Glyph="&#xE740;" FontSize="14" Foreground="White"/>
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>
