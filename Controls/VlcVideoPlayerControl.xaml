@@ -12,6 +12,7 @@
 
     <UserControl.Resources>
         <converters:LongToDoubleConverter x:Key="LongToDoubleConverter" />
+        <converters:VolumeIconConverter x:Key="VolumeIconConverter" />
         <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
         <local:InverseBoolConverter x:Key="BoolNegationConverter" />
         <local:PlayPauseIconConverter x:Key="PlayPauseIconConverter" />
@@ -103,7 +104,10 @@
                     BorderThickness="0"
                     Padding="0"
                     ToolTipService.ToolTip="Mute/Unmute">
-                <FontIcon x:Name="VolumeIcon" Glyph="&#xE767;" FontSize="14" Foreground="White"/>
+                <FontIcon x:Name="VolumeIcon" 
+                          Glyph="{x:Bind ViewModel.MediaPlayerWrapper.IsMuted, Mode=OneWay, Converter={StaticResource VolumeIconConverter}, FallbackValue='&#xE767;'}" 
+                          FontSize="14" 
+                          Foreground="White"/>
             </Button>
 
             <!-- Current Time -->

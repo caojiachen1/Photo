@@ -25,6 +25,8 @@ namespace Photo.ViewModels
                 _mediaPlayer.Paused += OnPaused;
                 _mediaPlayer.Stopped += OnStopped;
                 _mediaPlayer.VolumeChanged += OnVolumeChanged;
+                _mediaPlayer.Muted += OnMuteChanged;
+                _mediaPlayer.Unmuted += OnMuteChanged;
             }
         }
 
@@ -36,6 +38,7 @@ namespace Photo.ViewModels
             OnPropertyChanged(nameof(TotalTimeString));
             OnPropertyChanged(nameof(IsPlaying));
             OnPropertyChanged(nameof(Volume));
+            OnPropertyChanged(nameof(IsMuted));
         }
 
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
@@ -88,6 +91,19 @@ namespace Photo.ViewModels
                 if (!_isDisposed)
                 {
                     OnPropertyChanged(nameof(Volume));
+                    OnPropertyChanged(nameof(IsMuted));
+                }
+            });
+        }
+
+        private void OnMuteChanged(object? sender, EventArgs e)
+        {
+            if (IgnorePropertyChanges) return;
+            _dispatcherQueue.TryEnqueue(() =>
+            {
+                if (!_isDisposed)
+                {
+                    OnPropertyChanged(nameof(IsMuted));
                 }
             });
         }
@@ -105,6 +121,8 @@ namespace Photo.ViewModels
                 _mediaPlayer.Paused -= OnPaused;
                 _mediaPlayer.Stopped -= OnStopped;
                 _mediaPlayer.VolumeChanged -= OnVolumeChanged;
+                _mediaPlayer.Muted -= OnMuteChanged;
+                _mediaPlayer.Unmuted -= OnMuteChanged;
                 _mediaPlayer = null;
             }
         }
@@ -143,5 +161,7 @@ namespace Photo.ViewModels
                 }
             }
         }
+
+        public bool IsMuted => _mediaPlayer?.Mute ?? false;
     }
 }
