@@ -34,6 +34,38 @@
         <!-- 点击切换进度条显示 -->
         <Grid Background="Transparent" Tapped="ContentArea_Tapped"/>
 
+        <!-- 音量悬浮面板 -->
+        <Grid x:Name="VolumePanel"
+              VerticalAlignment="Bottom"
+              HorizontalAlignment="Center"
+              Margin="0,0,0,64"
+              Background="#2A2A2A"
+              CornerRadius="6"
+              Padding="12,4"
+              Visibility="Collapsed"
+              PointerEntered="VolumeControl_PointerEntered"
+              PointerExited="VolumeControl_PointerExited">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <FontIcon Glyph="{x:Bind ViewModel.MediaPlayerWrapper.IsMuted, Mode=OneWay, Converter={StaticResource VolumeIconConverter}, FallbackValue='&#xE767;'}" 
+                          FontSize="14" 
+                          Foreground="White"/>
+                <Slider x:Name="VolumeSlider"
+                        Width="150"
+                        Minimum="0"
+                        Maximum="100"
+                        Value="{x:Bind ViewModel.MediaPlayerWrapper.Volume, Mode=TwoWay}"
+                        VerticalAlignment="Center"
+                        Margin="0"
+                        IsThumbToolTipEnabled="False"/>
+                <TextBlock Text="{x:Bind ViewModel.MediaPlayerWrapper.Volume, Mode=OneWay}"
+                           Foreground="White"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Width="24"
+                           TextAlignment="Right"/>
+            </StackPanel>
+        </Grid>
+
         <!-- 自定义传输控件 -->
         <Grid x:Name="TransportControlsPanel"
               VerticalAlignment="Bottom"
@@ -103,7 +135,9 @@
                     Background="Transparent"
                     BorderThickness="0"
                     Padding="0"
-                    ToolTipService.ToolTip="Mute/Unmute">
+                    ToolTipService.ToolTip="Mute/Unmute"
+                    PointerEntered="VolumeButton_PointerEntered"
+                    PointerExited="VolumeButton_PointerExited">
                 <FontIcon x:Name="VolumeIcon" 
                           Glyph="{x:Bind ViewModel.MediaPlayerWrapper.IsMuted, Mode=OneWay, Converter={StaticResource VolumeIconConverter}, FallbackValue='&#xE767;'}" 
                           FontSize="14" 
