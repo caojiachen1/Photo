@@ -129,7 +129,7 @@ namespace Photo.ViewModels
         public RelayCommand<InitializedEventArgs> InitializedCommand { get; }
         public RelayCommand PointerMovedCommand { get; }
 
-        private async void PlayMedia(string path)
+        private async void PlayMedia(string path, long? startTime = null)
         {
             if (string.IsNullOrEmpty(path) || _libVLC == null || _mediaPlayer == null) return;
             
@@ -162,14 +162,18 @@ namespace Photo.ViewModels
                     // 创建并播放新的Media
                     var media = new Media(_libVLC, path, FromType.FromPath);
                     
-                    // 检查是否有历史播放记录
-                    long startTime = 0;
-                    if (_playbackHistory.TryGetValue(path, out long pos) && pos > 0)
+                    // 检查是否有历史播放记录或指定的开始时间
+                    long actualStartTime = startTime ?? 0;
+                    if (actualStartTime <= 0 && _playbackHistory.TryGetValue(path, out long pos) && pos > 0)
                     {
-                        startTime = pos;
+                        actualStartTime = pos;
+                    }
+
+                    if (actualStartTime > 0)
+                    {
                         // 使用选项设置开始时间，避免seek带来的卡顿
                         // 注意：LibVLC的时间选项通常是秒（浮点数）
-                        media.AddOption($":start-time={startTime / 1000.0}");
+                        media.AddOption($":start-time={actualStartTime / 1000.0}");
                     }
 
                     _currentMedia = media;
@@ -229,6 +233,25 @@ namespace Photo.ViewModels
         private void PlayPause()
         {
             if (_mediaPlayer == null) return;
+
+            if (_mediaPlayer.State == VLCState.Ended || _mediaPlayer.State == VLCState.Stopped)
+            {
+                long seekTime = _mediaPlayerWrapper?.TimeLong ?? 0;
+                long length = _mediaPlayer.Length;
+
+                // 如果当前时间接近视频末尾（说明是自然播放结束且用户没拖动），则从头开始播放
+                if (length > 0 && seekTime >= length - 1000)
+                {
+                    seekTime = 0;
+                }
+
+                if (!string.IsNullOrEmpty(_filePath))
+                {
+                    PlayMedia(_filePath, seekTime);
+                }
+                return;
+            }
+
             if (_mediaPlayer.IsPlaying)
                 _mediaPlayer.Pause();
             else

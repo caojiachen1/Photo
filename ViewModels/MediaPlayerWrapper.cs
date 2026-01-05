@@ -11,6 +11,7 @@ namespace Photo.ViewModels
         private readonly DispatcherQueue _dispatcherQueue;
         private bool _isDisposed;
         private int _lastVolume = 50; // 保存上次音量值，默认50
+        private long _currentTime = 0;
         public bool IgnorePropertyChanges { get; set; }
 
         public MediaPlayerWrapper(MediaPlayer mediaPlayer, DispatcherQueue dispatcherQueue)
@@ -25,6 +26,7 @@ namespace Photo.ViewModels
                 _mediaPlayer.Playing += OnPlaying;
                 _mediaPlayer.Paused += OnPaused;
                 _mediaPlayer.Stopped += OnStopped;
+                _mediaPlayer.EndReached += OnEndReached;
                 _mediaPlayer.VolumeChanged += OnVolumeChanged;
                 _mediaPlayer.Muted += OnMuteChanged;
                 _mediaPlayer.Unmuted += OnMuteChanged;
@@ -45,6 +47,11 @@ namespace Photo.ViewModels
         private void OnTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
         {
             if (IgnorePropertyChanges) return;
+            
+            // 如果播放已结束或停止，不要从播放器同步时间，以免覆盖用户拖动进度条设置的值
+            if (_mediaPlayer?.State == VLCState.Ended || _mediaPlayer?.State == VLCState.Stopped) return;
+
+            _currentTime = e.Time;
             _dispatcherQueue.TryEnqueue(() =>
             {
                 if (!_isDisposed)
@@ -71,6 +78,7 @@ namespace Photo.ViewModels
         private void OnPlaying(object? sender, EventArgs e) => UpdateIsPlaying();
         private void OnPaused(object? sender, EventArgs e) => UpdateIsPlaying();
         private void OnStopped(object? sender, EventArgs e) => UpdateIsPlaying();
+        private void OnEndReached(object? sender, EventArgs e) => UpdateIsPlaying();
 
         private void UpdateIsPlaying()
         {
@@ -121,6 +129,7 @@ namespace Photo.ViewModels
                 _mediaPlayer.Playing -= OnPlaying;
                 _mediaPlayer.Paused -= OnPaused;
                 _mediaPlayer.Stopped -= OnStopped;
+                _mediaPlayer.EndReached -= OnEndReached;
                 _mediaPlayer.VolumeChanged -= OnVolumeChanged;
                 _mediaPlayer.Muted -= OnMuteChanged;
                 _mediaPlayer.Unmuted -= OnMuteChanged;
@@ -130,19 +139,27 @@ namespace Photo.ViewModels
 
         public long TimeLong
         {
-            get => _mediaPlayer?.Time ?? 0;
+            get => _currentTime;
             set
             {
                 if (IgnorePropertyChanges) return;
-                if (_mediaPlayer != null && _mediaPlayer.Time != value)
+                if (_currentTime != value)
                 {
-                    _mediaPlayer.Time = value;
+                    _currentTime = value;
+                    
+                    // 只有在播放或暂停状态下才同步给播放器，其他状态（如 Ended, Stopped）下 LibVLC 不支持直接 Seek
+                    if (_mediaPlayer != null && (_mediaPlayer.State == VLCState.Playing || _mediaPlayer.State == VLCState.Paused))
+                    {
+                        _mediaPlayer.Time = value;
+                    }
+                    
                     OnPropertyChanged();
+                    OnPropertyChanged(nameof(TimeString));
                 }
             }
         }
 
-        public string TimeString => TimeSpan.FromMilliseconds(_mediaPlayer?.Time ?? 0).ToString(@"hh\:mm\:ss");
+        public string TimeString => TimeSpan.FromMilliseconds(_currentTime).ToString(@"hh\:mm\:ss");
 
         public long TotalTimeLong => _mediaPlayer?.Length ?? 0;
 
@@ -152,12 +169,28 @@ namespace Photo.ViewModels
 
         public int Volume
         {
-            get => _mediaPlayer?.Volume ?? 0;
+            get
+            {
+                int v = _mediaPlayer?.Volume ?? -1;
+                // 如果 LibVLC 返回 -1 (表示无音频轨道)，则显示我们记录的上次音量或默认值
+                return v == -1 ? _lastVolume : v;
+            }
             set
             {
-                if (_mediaPlayer != null && _mediaPlayer.Volume != value)
+                if (_mediaPlayer != null)
                 {
-                    _mediaPlayer.Volume = value;
+                    int currentV = _mediaPlayer.Volume;
+                    // 只有在有音频轨道且值确实改变时才设置给播放器
+                    if (currentV != -1 && currentV != value)
+                    {
+                        _mediaPlayer.Volume = value;
+                    }
+                    
+                    // 始终记录非零音量，以便静音恢复或无音频时显示
+                    if (value > 0)
+                    {
+                        _lastVolume = value;
+                    }
                     
                     // 如果音量被手动调到0，自动设置为静音
                     if (value == 0 && !_mediaPlayer.Mute)
@@ -168,12 +201,6 @@ namespace Photo.ViewModels
                     else if (value > 0 && _mediaPlayer.Mute)
                     {
                         _mediaPlayer.Mute = false;
-                    }
-                    
-                    // 保存非零音量值
-                    if (value > 0)
-                    {
-                        _lastVolume = value;
                     }
                     
                     OnPropertyChanged();
