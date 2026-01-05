@@ -363,7 +363,7 @@
             <!-- 右侧缩放控制 -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="0,0,12,0" VerticalAlignment="Center">
                 <!-- 旋转按钮 -->
-                <Button x:Name="RotateButton" ToolTipService.ToolTip="旋转" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.RotateCommand}">
+                <Button x:Name="RotateButton" ToolTipService.ToolTip="旋转" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.RotateCommand}" IsEnabled="{x:Bind ViewModel.IsImageInteractionEnabled, Mode=OneWay}">
                     <FontIcon Glyph="&#xE7AD;" FontSize="14"/>
                 </Button>
 
@@ -371,12 +371,12 @@
                 <Border Width="1" Height="20" Background="#444444" Margin="8,0"/>
 
                 <!-- 适应窗口 -->
-                <Button x:Name="FitToWindowButton" ToolTipService.ToolTip="适应窗口" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.FitToWindowCommand}">
+                <Button x:Name="FitToWindowButton" ToolTipService.ToolTip="适应窗口" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.FitToWindowCommand}" IsEnabled="{x:Bind ViewModel.IsImageInteractionEnabled, Mode=OneWay}">
                     <FontIcon Glyph="&#xE73F;" FontSize="14"/>
                 </Button>
 
                 <!-- 实际大小 (改为显示 1:1 文本，表示实际尺寸) -->
-                <Button x:Name="ActualSizeButton" ToolTipService.ToolTip="实际大小 (1:1)" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ActualSizeCommand}">
+                <Button x:Name="ActualSizeButton" ToolTipService.ToolTip="实际大小 (1:1)" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ActualSizeCommand}" IsEnabled="{x:Bind ViewModel.IsImageInteractionEnabled, Mode=OneWay}">
                     <TextBlock Text="1:1" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{ThemeResource SystemControlForegroundBaseHighBrush}"/>
                 </Button>
 
@@ -384,7 +384,7 @@
                 <Border Width="1" Height="20" Background="#444444" Margin="8,0"/>
 
                 <!-- 缩放百分比下拉菜单 -->
-                <DropDownButton x:Name="ZoomButton" ToolTipService.ToolTip="缩放" MinWidth="60" Background="Transparent" BorderBrush="Transparent">
+                <DropDownButton x:Name="ZoomButton" ToolTipService.ToolTip="缩放" MinWidth="60" Background="Transparent" BorderBrush="Transparent" IsEnabled="{x:Bind ViewModel.IsImageInteractionEnabled, Mode=OneWay}">
                     <TextBlock x:Name="ZoomPercentText" Text="{x:Bind ViewModel.ZoomPercent, Mode=OneWay}" FontSize="12"/>
                     <DropDownButton.Flyout>
                         <MenuFlyout Placement="Top">
@@ -401,21 +401,22 @@
                 </DropDownButton>
 
                 <!-- 缩小按钮 -->
-                <Button x:Name="ZoomOutButton" ToolTipService.ToolTip="缩小" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ZoomOutCommand}" VerticalAlignment="Center">
+                <Button x:Name="ZoomOutButton" ToolTipService.ToolTip="缩小" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ZoomOutCommand}" VerticalAlignment="Center" IsEnabled="{x:Bind ViewModel.IsImageInteractionEnabled, Mode=OneWay}">
                     <FontIcon Glyph="&#xE71F;" FontSize="14"/>
                 </Button>
 
                 <!-- 缩放滑块 -->
                 <Slider x:Name="ZoomSlider" 
-                        Width="120" 
-                        Minimum="10" 
-                        Maximum="400" 
-                        Value="{x:Bind ViewModel.ZoomSliderValue, Mode=TwoWay}" 
-                        VerticalAlignment="Center"
-                        ValueChanged="ZoomSlider_ValueChanged"/>
+                    Width="120" 
+                    Minimum="10" 
+                    Maximum="400" 
+                    Value="{x:Bind ViewModel.ZoomSliderValue, Mode=TwoWay}" 
+                    VerticalAlignment="Center"
+                    ValueChanged="ZoomSlider_ValueChanged"
+                    IsEnabled="{x:Bind ViewModel.IsImageInteractionEnabled, Mode=OneWay}"/>
 
                 <!-- 放大按钮 -->
-                <Button x:Name="ZoomInButton" ToolTipService.ToolTip="放大" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ZoomInCommand}" VerticalAlignment="Center">
+                <Button x:Name="ZoomInButton" ToolTipService.ToolTip="放大" Background="Transparent" BorderBrush="Transparent" Padding="4" Command="{x:Bind ViewModel.ZoomInCommand}" VerticalAlignment="Center" IsEnabled="{x:Bind ViewModel.IsImageInteractionEnabled, Mode=OneWay}">
                     <FontIcon Glyph="&#xE8A3;" FontSize="14"/>
                 </Button>
 

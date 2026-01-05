@@ -104,6 +104,7 @@ namespace Photo.ViewModels
                 if (SetProperty(ref _isImageLoaded, value))
                 {
                     OnPropertyChanged(nameof(PlaceholderVisibility));
+                    OnPropertyChanged(nameof(IsImageInteractionEnabled));
                     RaiseCommandsCanExecuteChanged();
                 }
             }
@@ -119,12 +120,16 @@ namespace Photo.ViewModels
                 {
                     OnPropertyChanged(nameof(ImageVisibility));
                     OnPropertyChanged(nameof(VideoVisibility));
+                    OnPropertyChanged(nameof(IsImageInteractionEnabled));
+                    RaiseCommandsCanExecuteChanged();
                 }
             }
         }
 
         public Visibility ImageVisibility => IsVideo ? Visibility.Collapsed : Visibility.Visible;
         public Visibility VideoVisibility => IsVideo ? Visibility.Visible : Visibility.Collapsed;
+
+        public bool IsImageInteractionEnabled => IsImageLoaded && !IsVideo;
 
         private StorageFile? _videoFile;
         public StorageFile? VideoFile
@@ -374,7 +379,7 @@ namespace Photo.ViewModels
             _dispatcherQueue = dispatcherQueue;
 
             // 初始化命令
-            RotateCommand = new AsyncRelayCommand(RotateAsync, () => IsImageLoaded);
+            RotateCommand = new AsyncRelayCommand(RotateAsync, () => IsImageInteractionEnabled);
             DeleteCommand = new AsyncRelayCommand(DeleteAsync, () => IsImageLoaded);
             SaveAsCommand = new AsyncRelayCommand(SaveAsAsync, () => IsImageLoaded);
             CopyCommand = new AsyncRelayCommand(CopyAsync, () => IsImageLoaded);
@@ -385,15 +390,15 @@ namespace Photo.ViewModels
             ToggleFullScreenCommand = new RelayCommand(() => IsFullScreen = !IsFullScreen);
             NavigatePreviousCommand = new AsyncRelayCommand(() => NavigateAsync(-1), () => IsPreviousButtonVisible);
             NavigateNextCommand = new AsyncRelayCommand(() => NavigateAsync(1), () => IsNextButtonVisible);
-            FitToWindowCommand = new RelayCommand(() => RequestFitToWindow?.Invoke(), () => IsImageLoaded);
-            ActualSizeCommand = new RelayCommand(() => SetZoom(1.0f), () => IsImageLoaded);
-            ZoomInCommand = new RelayCommand(ZoomIn, () => IsImageLoaded);
-            ZoomOutCommand = new RelayCommand(ZoomOut, () => IsImageLoaded);
-            Zoom25Command = new RelayCommand(() => SetZoom(0.25f), () => IsImageLoaded);
-            Zoom50Command = new RelayCommand(() => SetZoom(0.5f), () => IsImageLoaded);
-            Zoom100Command = new RelayCommand(() => SetZoom(1.0f), () => IsImageLoaded);
-            Zoom200Command = new RelayCommand(() => SetZoom(2.0f), () => IsImageLoaded);
-            Zoom400Command = new RelayCommand(() => SetZoom(4.0f), () => IsImageLoaded);
+            FitToWindowCommand = new RelayCommand(() => RequestFitToWindow?.Invoke(), () => IsImageInteractionEnabled);
+            ActualSizeCommand = new RelayCommand(() => SetZoom(1.0f), () => IsImageInteractionEnabled);
+            ZoomInCommand = new RelayCommand(ZoomIn, () => IsImageInteractionEnabled);
+            ZoomOutCommand = new RelayCommand(ZoomOut, () => IsImageInteractionEnabled);
+            Zoom25Command = new RelayCommand(() => SetZoom(0.25f), () => IsImageInteractionEnabled);
+            Zoom50Command = new RelayCommand(() => SetZoom(0.5f), () => IsImageInteractionEnabled);
+            Zoom100Command = new RelayCommand(() => SetZoom(1.0f), () => IsImageInteractionEnabled);
+            Zoom200Command = new RelayCommand(() => SetZoom(2.0f), () => IsImageInteractionEnabled);
+            Zoom400Command = new RelayCommand(() => SetZoom(4.0f), () => IsImageInteractionEnabled);
             OpenSettingsCommand = new AsyncRelayCommand(OpenSettingsAsync);
 
             // 文件监视

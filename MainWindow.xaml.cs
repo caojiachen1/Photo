@@ -209,7 +209,7 @@ namespace Photo
 
         private void FitImageToWindow()
         {
-            if (!ViewModel.IsImageLoaded) return;
+            if (!ViewModel.IsImageInteractionEnabled) return;
 
             var scale = CalculateFitToWindowZoom();
             _minZoomFactor = scale;
@@ -218,12 +218,13 @@ namespace Photo
 
         private void SetZoom(float zoom)
         {
+            if (!ViewModel.IsImageInteractionEnabled) return;
             ImageScrollViewer.ChangeView(null, null, zoom);
         }
 
         private void ZoomIn()
         {
-            if (!ViewModel.IsImageLoaded) return;
+            if (!ViewModel.IsImageInteractionEnabled) return;
 
             var currentZoom = ImageScrollViewer.ZoomFactor;
             var newZoom = currentZoom * 1.25f;
@@ -233,7 +234,7 @@ namespace Photo
 
         private void ZoomOut()
         {
-            if (!ViewModel.IsImageLoaded) return;
+            if (!ViewModel.IsImageInteractionEnabled) return;
 
             UpdateMinZoomFactor();
             var currentZoom = ImageScrollViewer.ZoomFactor;
@@ -244,7 +245,7 @@ namespace Photo
 
         private void OnZoomSliderValueChanged(double value)
         {
-            if (_isUpdatingSlider || !ViewModel.IsImageLoaded) return;
+            if (_isUpdatingSlider || !ViewModel.IsImageInteractionEnabled) return;
 
             var newZoom = (float)(value / 100.0);
             UpdateMinZoomFactor();
@@ -258,6 +259,12 @@ namespace Photo
 
         private void ImageScrollViewer_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e)
         {
+            if (!ViewModel.IsImageInteractionEnabled)
+            {
+                SetElementCursor(ImageContainerGrid, InputSystemCursorShape.Arrow);
+                return;
+            }
+
             if (!e.IsIntermediate)
             {
                 _isUpdatingSlider = true;
@@ -275,7 +282,7 @@ namespace Photo
 
         private void ImageContainer_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
         {
-            if (!ViewModel.IsImageLoaded) return;
+            if (!ViewModel.IsImageInteractionEnabled) return;
 
             var properties = e.GetCurrentPoint(ImageScrollViewer).Properties;
             var delta = properties.MouseWheelDelta;
@@ -310,7 +317,7 @@ namespace Photo
 
         private void ImageContainer_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            if (!ViewModel.IsImageLoaded) return;
+            if (!ViewModel.IsImageInteractionEnabled) return;
 
             var point = e.GetCurrentPoint(sender as UIElement);
 
@@ -331,7 +338,7 @@ namespace Photo
 
         private void ImageContainer_PointerMoved(object sender, PointerRoutedEventArgs e)
         {
-            if (!_isDragging || !ViewModel.IsImageLoaded) return;
+            if (!_isDragging || !ViewModel.IsImageInteractionEnabled) return;
 
             var currentPosition = e.GetCurrentPoint(sender as UIElement).Position;
 
@@ -433,7 +440,7 @@ namespace Photo
                 RootGrid.RowDefinitions[3].Height = new GridLength(48);
             }
 
-            if (ViewModel.IsImageLoaded)
+            if (ViewModel.IsImageInteractionEnabled)
             {
                 DispatcherQueue.TryEnqueue(FitImageToWindow);
             }
@@ -452,7 +459,7 @@ namespace Photo
 
         private void UpdateCursor()
         {
-            if (!ViewModel.IsImageLoaded)
+            if (!ViewModel.IsImageInteractionEnabled)
             {
                 SetElementCursor(ImageContainerGrid, InputSystemCursorShape.Arrow);
                 return;
