@@ -46,6 +46,18 @@ namespace Photo.Controls
         {
             _volumeTimer.Stop();
             VolumePanel.Visibility = Visibility.Visible;
+            VolumePanel.UpdateLayout();
+
+            var transform = VolumeButton.TransformToVisual(ContentArea);
+            var point = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+            var buttonCenter = point.X + VolumeButton.ActualWidth / 2;
+            var panelWidth = VolumePanel.ActualWidth;
+
+            var left = buttonCenter - (panelWidth / 2);
+            if (left < 0) left = 0;
+            if (left + panelWidth > ContentArea.ActualWidth) left = ContentArea.ActualWidth - panelWidth;
+
+            VolumePanel.Margin = new Thickness(left, 0, 0, 64);
         }
 
         private void VolumeButton_PointerExited(object sender, PointerRoutedEventArgs e)

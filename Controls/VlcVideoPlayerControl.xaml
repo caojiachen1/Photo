@@ -37,7 +37,7 @@
         <!-- 音量悬浮面板 -->
         <Grid x:Name="VolumePanel"
               VerticalAlignment="Bottom"
-              HorizontalAlignment="Center"
+              HorizontalAlignment="Left"
               Margin="0,0,0,64"
               Background="#2A2A2A"
               CornerRadius="6"
