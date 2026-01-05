@@ -256,8 +256,7 @@ namespace Photo.ViewModels
 
         private void Mute()
         {
-            if (_mediaPlayer != null)
-                _mediaPlayer.Mute = !_mediaPlayer.Mute;
+            _mediaPlayerWrapper?.ToggleMute();
         }
 
         private void ToggleFullScreen()

@@ -10,6 +10,7 @@ namespace Photo.ViewModels
         private MediaPlayer? _mediaPlayer;
         private readonly DispatcherQueue _dispatcherQueue;
         private bool _isDisposed;
+        private int _lastVolume = 50; // 保存上次音量值，默认50
         public bool IgnorePropertyChanges { get; set; }
 
         public MediaPlayerWrapper(MediaPlayer mediaPlayer, DispatcherQueue dispatcherQueue)
@@ -157,11 +158,57 @@ namespace Photo.ViewModels
                 if (_mediaPlayer != null && _mediaPlayer.Volume != value)
                 {
                     _mediaPlayer.Volume = value;
+                    
+                    // 如果音量被手动调到0，自动设置为静音
+                    if (value == 0 && !_mediaPlayer.Mute)
+                    {
+                        _mediaPlayer.Mute = true;
+                    }
+                    // 如果音量从0调高，自动取消静音
+                    else if (value > 0 && _mediaPlayer.Mute)
+                    {
+                        _mediaPlayer.Mute = false;
+                    }
+                    
+                    // 保存非零音量值
+                    if (value > 0)
+                    {
+                        _lastVolume = value;
+                    }
+                    
                     OnPropertyChanged();
                 }
             }
         }
 
         public bool IsMuted => _mediaPlayer?.Mute ?? false;
+
+        /// <summary>
+        /// 切换静音状态，同时同步音量条
+        /// </summary>
+        public void ToggleMute()
+        {
+            if (_mediaPlayer == null) return;
+
+            if (_mediaPlayer.Mute)
+            {
+                // 取消静音：恢复之前的音量
+                _mediaPlayer.Mute = false;
+                if (_lastVolume > 0)
+                {
+                    _mediaPlayer.Volume = _lastVolume;
+                }
+            }
+            else
+            {
+                // 设置静音：保存当前音量并将音量条设为0
+                if (_mediaPlayer.Volume > 0)
+                {
+                    _lastVolume = _mediaPlayer.Volume;
+                }
+                _mediaPlayer.Mute = true;
+                _mediaPlayer.Volume = 0;
+            }
+        }
     }
 }
