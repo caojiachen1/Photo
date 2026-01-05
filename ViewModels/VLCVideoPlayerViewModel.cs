@@ -20,6 +20,7 @@ namespace Photo.ViewModels
         private string _filePath = string.Empty;
         private int _rowSpan = 2;
         private bool _isNotFullScreen = true;
+        private bool _isRepeat = false;
         private readonly DispatcherQueue _dispatcherQueue;
 
         private static readonly ConcurrentDictionary<string, long> _playbackHistory = new();
@@ -38,7 +39,7 @@ namespace Photo.ViewModels
             VolumeUpCommand = new RelayCommand(VolumeUp);
             VolumeDownCommand = new RelayCommand(VolumeDown);
             MuteCommand = new RelayCommand(Mute);
-            FullScreenCommand = new RelayCommand(ToggleFullScreen);
+            RepeatCommand = new RelayCommand(ToggleRepeat);
             ToggleControlsCommand = new RelayCommand(ToggleControls);
             
             // Placeholder commands for events
@@ -56,6 +57,9 @@ namespace Photo.ViewModels
             _libVLC = new LibVLC(enableDebugLogs: true, args.SwapChainOptions);
             _mediaPlayer = new MediaPlayer(_libVLC);
             _mediaPlayerWrapper = new MediaPlayerWrapper(_mediaPlayer, _dispatcherQueue);
+
+            // 订阅播放结束事件以实现循环播放
+            _mediaPlayer.EndReached += OnMediaEndReached;
 
             OnPropertyChanged(nameof(Player));
             OnPropertyChanged(nameof(MediaPlayerWrapper));
@@ -106,6 +110,12 @@ namespace Photo.ViewModels
             set => SetProperty(ref _isNotFullScreen, value);
         }
 
+        public bool IsRepeat
+        {
+            get => _isRepeat;
+            set => SetProperty(ref _isRepeat, value);
+        }
+
         public RelayCommand PlayPauseCommand { get; }
         public RelayCommand StopCommand { get; }
         public RelayCommand RewindCommand { get; }
@@ -113,7 +123,7 @@ namespace Photo.ViewModels
         public RelayCommand VolumeUpCommand { get; }
         public RelayCommand VolumeDownCommand { get; }
         public RelayCommand MuteCommand { get; }
-        public RelayCommand FullScreenCommand { get; }
+        public RelayCommand RepeatCommand { get; }
         public RelayCommand ToggleControlsCommand { get; }
         public RelayCommand ScrollChangedCommand { get; }
         public RelayCommand<InitializedEventArgs> InitializedCommand { get; }
@@ -259,10 +269,21 @@ namespace Photo.ViewModels
             _mediaPlayerWrapper?.ToggleMute();
         }
 
-        private void ToggleFullScreen()
+        private void ToggleRepeat()
         {
-            IsNotFullScreen = !IsNotFullScreen;
-            // Logic to toggle fullscreen in view would be needed, usually via event or service
+            IsRepeat = !IsRepeat;
+        }
+
+        private void OnMediaEndReached(object? sender, EventArgs e)
+        {
+            if (IsRepeat && _mediaPlayer != null && _currentMedia != null)
+            {
+                _dispatcherQueue.TryEnqueue(() =>
+                {
+                    _mediaPlayer.Stop();
+                    _mediaPlayer.Play(_currentMedia);
+                });
+            }
         }
 
         private void ToggleControls()
@@ -276,6 +297,11 @@ namespace Photo.ViewModels
             _isDisposed = true;
 
             SaveCurrentPosition();
+
+            if (_mediaPlayer != null)
+            {
+                _mediaPlayer.EndReached -= OnMediaEndReached;
+            }
 
             _mediaPlayerWrapper?.Dispose();
             _mediaPlayerWrapper = null;
