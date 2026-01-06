@@ -27,15 +27,25 @@
                 <Grid Background="Transparent">
                     <VisualStateManager.VisualStateGroups>
                         <VisualStateGroup x:Name="CommonStates">
-                            <VisualState x:Name="Normal" />
+                            <VisualStateGroup.Transitions>
+                                <VisualTransition To="PointerOver" GeneratedDuration="0:0:0.2"/>
+                                <VisualTransition To="Normal" GeneratedDuration="0:0:0.5"/>
+                            </VisualStateGroup.Transitions>
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Target="ContentGrid.Opacity" Value="0" />
+                                </VisualState.Setters>
+                            </VisualState>
                             <VisualState x:Name="PointerOver">
                                 <VisualState.Setters>
                                     <Setter Target="ContentGrid.Background" Value="#19FFFFFF" />
+                                    <Setter Target="ContentGrid.Opacity" Value="1" />
                                 </VisualState.Setters>
                             </VisualState>
                             <VisualState x:Name="Pressed">
                                 <VisualState.Setters>
                                     <Setter Target="ContentGrid.Background" Value="#33FFFFFF" />
+                                    <Setter Target="ContentGrid.Opacity" Value="1" />
                                 </VisualState.Setters>
                             </VisualState>
                         </VisualStateGroup>
@@ -45,7 +55,8 @@
                           Width="40" Height="40" 
                           CornerRadius="20" 
                           VerticalAlignment="Center" 
-                          HorizontalAlignment="Center">
+                          HorizontalAlignment="Center"
+                          Opacity="0">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Grid>
                 </Grid>
@@ -202,7 +213,7 @@
                     HorizontalAlignment="Left"
                     VerticalAlignment="Stretch"
                     Margin="0"
-                    Width="60"
+                    Width="100"
                     Command="{x:Bind ViewModel.NavigatePreviousCommand}"
                     Visibility="{x:Bind ViewModel.PreviousButtonVisibility, Mode=OneWay}"
                     Canvas.ZIndex="10">
@@ -214,7 +225,7 @@
                     HorizontalAlignment="Right"
                     VerticalAlignment="Stretch"
                     Margin="0"
-                    Width="60"
+                    Width="100"
                     Command="{x:Bind ViewModel.NavigateNextCommand}"
                     Visibility="{x:Bind ViewModel.NextButtonVisibility, Mode=OneWay}"
                     Canvas.ZIndex="10">
