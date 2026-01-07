@@ -403,6 +403,7 @@ namespace Photo.ViewModels
 
             // 文件监视
             _fileWatcherService.FilesChanged += OnFilesChanged;
+            _fileWatcherService.FileRenamed += OnFileRenamed;
 
             // 初始化定时器
             InitializeFolderUpdateTimer();
@@ -619,6 +620,48 @@ namespace Photo.ViewModels
             {
                 _folderUpdateTimer?.Stop();
                 _folderUpdateTimer?.Start();
+            });
+        }
+
+        private void OnFileRenamed(string oldPath, string newPath)
+        {
+            _dispatcherQueue.TryEnqueue(async () =>
+            {
+                if (_currentFile != null && string.Equals(_currentFile.Path, oldPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var newFile = await StorageFile.GetFileFromPathAsync(newPath);
+                        _currentFile = newFile;
+
+                        var imageInfo = await _imageService.LoadImageAsync(newFile);
+                        if (imageInfo != null)
+                        {
+                            FileName = imageInfo.FileName;
+                            WindowTitle = $"{imageInfo.FileName} - Photo";
+                            FileSize = FormatFileSize(imageInfo.FileSize);
+                            UpdateFileInfo(imageInfo);
+                        }
+
+                        if (IsVideo)
+                        {
+                            VideoFile = newFile;
+                        }
+
+                        // 即使是当前文件重命名，也需要刷新文件夹列表以保证索引正确
+                        await UpdateFileListAsync();
+                        UpdateNavigationButtons();
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error handling file rename: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    // 如果不是当前文件重命名，触发延迟刷新
+                    OnFilesChanged();
+                }
             });
         }
 

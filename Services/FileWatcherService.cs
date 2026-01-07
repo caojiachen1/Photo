@@ -9,6 +9,7 @@ namespace Photo.Services
     public interface IFileWatcherService
     {
         event Action? FilesChanged;
+        event Action<string, string>? FileRenamed;
         void StartWatching(string folderPath);
         void StopWatching();
     }
@@ -20,8 +21,10 @@ namespace Photo.Services
     {
         private FileSystemWatcher? _fileWatcher;
         private readonly string[] _imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".ico", ".tiff", ".tif" };
+        private readonly string[] _videoExtensions = { ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".3gp", ".mts" };
 
         public event Action? FilesChanged;
+        public event Action<string, string>? FileRenamed;
 
         public void StartWatching(string folderPath)
         {
@@ -38,12 +41,13 @@ namespace Photo.Services
                 {
                     _fileWatcher = new FileSystemWatcher(folderPath)
                     {
-                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime | NotifyFilters.LastWrite,
                         Filter = "*.*"
                     };
 
                     _fileWatcher.Created += OnFileChanged;
                     _fileWatcher.Deleted += OnFileChanged;
+                    _fileWatcher.Changed += OnFileChanged;
                     _fileWatcher.Renamed += OnFileRenamed;
                     _fileWatcher.EnableRaisingEvents = true;
                 }
@@ -66,7 +70,7 @@ namespace Photo.Services
 
         private void OnFileChanged(object sender, FileSystemEventArgs e)
         {
-            if (IsImageFile(Path.GetExtension(e.FullPath)))
+            if (IsSupportedFile(Path.GetExtension(e.FullPath)))
             {
                 FilesChanged?.Invoke();
             }
@@ -74,15 +78,17 @@ namespace Photo.Services
 
         private void OnFileRenamed(object sender, RenamedEventArgs e)
         {
-            if (IsImageFile(Path.GetExtension(e.OldFullPath)) || IsImageFile(Path.GetExtension(e.FullPath)))
+            if (IsSupportedFile(Path.GetExtension(e.OldFullPath)) || IsSupportedFile(Path.GetExtension(e.FullPath)))
             {
+                FileRenamed?.Invoke(e.OldFullPath, e.FullPath);
                 FilesChanged?.Invoke();
             }
         }
 
-        private bool IsImageFile(string extension)
+        private bool IsSupportedFile(string extension)
         {
-            return Array.Exists(_imageExtensions, ext => ext.Equals(extension, StringComparison.OrdinalIgnoreCase));
+            return Array.Exists(_imageExtensions, ext => ext.Equals(extension, StringComparison.OrdinalIgnoreCase)) ||
+                   Array.Exists(_videoExtensions, ext => ext.Equals(extension, StringComparison.OrdinalIgnoreCase));
         }
 
         public void Dispose()
